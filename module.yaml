@@ -1,0 +1,18 @@
+name: registry-operator
+weight: 900
+stage: "Experimental"
+tags: ["registry", "docker", "monitoring", "operator"]
+
+namespace: d8-registry-operator
+
+descriptions:
+  en: "Kubernetes operator for scanning Docker Registry and tracking image versions"
+  ru: "Kubernetes оператор для сканирования Docker Registry и отслеживания версий образов"
+
+requirements:
+  deckhouse: ">= 1.61"
+  kubernetes: ">= 1.27"
+
+disable:
+  confirmation: true
+  message: "Disabling the module will remove the operator and stop registry scanning. Existing Registry resources will be preserved."

@@ -1,0 +1,49 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+go.sum
+
+# Vendor
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kubernetes credentials
+*.kubeconfig
+kubeconfig
+.kube/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+*.md
+!README.md
+
+.claude

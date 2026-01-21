@@ -1,0 +1,14 @@
+project: registry-operator
+configVersion: 1
+build:
+  imageSpec:
+    author: Registry Operator <noreply@example.com>
+    clearHistory: true
+    config:
+      clearWerfLabels: true
+---
+{{ tpl (.Files.Get ".werf/stages/base-images.yaml") . }}
+{{ tpl (.Files.Get ".werf/stages/images.yaml") . }}
+{{ tpl (.Files.Get ".werf/stages/images-digests.yaml") . }}
+{{ tpl (.Files.Get ".werf/stages/bundle.yaml") . }}
+{{ tpl (.Files.Get ".werf/stages/release.yaml") . }}

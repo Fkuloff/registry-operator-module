@@ -1,0 +1,11 @@
+# Patterns to ignore when building Helm chart
+.git/
+.github/
+*.md
+README*
+LICENSE
+OWNERS
+.gitignore
+.helmignore
+config/samples/
+docs/

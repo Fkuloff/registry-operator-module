@@ -1,0 +1,4 @@
+---
+image: {{ .ImageName }}
+context: .
+dockerfile: images/{{ .ImageName }}/Dockerfile

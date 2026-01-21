@@ -1,0 +1,38 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Go source files
+*.go text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+
+# YAML files
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Markdown files
+*.md text eol=lf
+
+# Dockerfile
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Makefile
+Makefile text eol=lf
+*.mk text eol=lf
+
+# Binary files
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.tgz binary
