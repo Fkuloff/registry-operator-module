@@ -1,0 +1,13 @@
+giterminismConfigVersion: 1
+config:
+  goTemplateRendering:
+    allowEnvVariables:
+      - /CI_.+/
+      - MODULES_MODULE_TAG
+      - MODULE_NAME
+      - MODULE_IMAGE_DIGEST_CONTROLLER
+  stapel:
+    mount:
+      allowBuildDir: true
+      allowFromPaths:
+        - ~/go-pkg-cache

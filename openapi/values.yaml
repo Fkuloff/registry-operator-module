@@ -1,0 +1,17 @@
+x-extend:
+  schema: config-values.yaml
+type: object
+additionalProperties: false
+properties:
+  internal:
+    type: object
+    default: {}
+    additionalProperties: false
+    description: |
+      Internal values for the module. Do not set them manually.
+    properties:
+      version:
+        type: string
+        default: "v0.1.0"
+        description: |
+          Current module version.

@@ -1,0 +1,51 @@
+type: object
+additionalProperties: false
+description: |
+  Configuration parameters for the registry-operator module.
+properties:
+  logLevel:
+    type: string
+    default: "info"
+    enum: ["debug", "info", "warn", "error"]
+    description: |
+      Log level for the controller.
+      - `debug` - verbose logging for troubleshooting
+      - `info` - standard operational information (default)
+      - `warn` - warning messages only
+      - `error` - error messages only
+
+  nodeSelector:
+    type: object
+    additionalProperties:
+      type: string
+    description: |
+      Optional node selector for the controller pod placement.
+
+      If omitted, the controller will be scheduled on system nodes automatically.
+
+      Example:
+      ```yaml
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      ```
+
+  tolerations:
+    type: array
+    description: |
+      Optional tolerations for the controller pod.
+
+      If omitted, standard system tolerations will be applied.
+    items:
+      type: object
+      properties:
+        effect:
+          type: string
+        key:
+          type: string
+        operator:
+          type: string
+        tolerationSeconds:
+          type: integer
+          format: int64
+        value:
+          type: string

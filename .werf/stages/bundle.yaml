@@ -1,0 +1,29 @@
+# Bundle image, stored in your.registry.io/modules/<module-name>:<semver>
+---
+image: bundle
+from: {{ .Images.SCRATCH }}
+import:
+  - image: images-digests
+    add: /images_digests.json
+    to: /images_digests.json
+    after: setup
+git:
+  - add: /
+    to: /
+    excludePaths:
+      - hooks/batch
+      - images
+      - "**/*.go"
+      - "**/go.mod"
+      - "**/go.sum"
+    includePaths:
+      - .helmignore
+      - docs
+      - charts
+      - crds
+      - hooks
+      - openapi
+      - templates
+      - Chart.yaml
+      - module.yaml
+      - values.yaml

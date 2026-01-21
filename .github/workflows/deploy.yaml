@@ -1,0 +1,45 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - alpha
+          - beta
+          - early-access
+          - stable
+          - rock-solid
+      tag:
+        description: 'Module tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  MODULE_NAME: registry-operator
+
+jobs:
+  deploy:
+    name: Deploy the module
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: deckhouse/modules-actions/setup@main
+        with:
+          registry: ghcr.io
+          registry-login: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy
+        uses: deckhouse/modules-actions/deploy@main
+        with:
+          module-source: ghcr.io/${{ github.repository_owner }}
+          module-name: ${{ env.MODULE_NAME }}
+          module-tag: ${{ inputs.tag }}
+          release-channel: ${{ inputs.release_channel }}
