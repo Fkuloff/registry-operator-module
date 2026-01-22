@@ -1,4 +1,4 @@
-module kube-controller
+module registry-operator
 
 go 1.24.0
 

@@ -1,7 +1,10 @@
 .PHONY: generate manifests build run test docker-build docker-push install uninstall deploy undeploy
 
 # Image URL to use for building/pushing image targets
-IMG ?= controller:latest
+IMG ?= registry-operator:latest
+
+# Source directory
+SRC_DIR = images/registry-operator/src
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -21,33 +24,38 @@ help: ## Display this help.
 ##@ Development
 
 manifests: controller-gen ## Generate CRD manifests.
-	$(CONTROLLER_GEN) crd paths="./api/v1alpha1/..." output:crd:dir=./crds
+	$(CONTROLLER_GEN) crd paths="./$(SRC_DIR)/apis/..." output:crd:dir=./crds
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object paths="./api/v1alpha1/..."
+	$(CONTROLLER_GEN) object paths="./$(SRC_DIR)/apis/..."
 
 fmt: ## Run go fmt against code.
-	go fmt ./...
+	cd $(SRC_DIR) && go fmt ./...
 
 vet: ## Run go vet against code.
-	go vet ./...
+	cd $(SRC_DIR) && go vet ./...
 
 test: fmt vet ## Run tests.
-	go test ./... -v
+	cd $(SRC_DIR) && go test ./... -v
 
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/controller cmd/main.go
+	cd $(SRC_DIR) && go build -o ../../../bin/registry-operator ./cmd/main.go
 
 run: manifests generate fmt vet ## Run from your host.
-	go run ./cmd/main.go
+	cd $(SRC_DIR) && go run ./cmd/main.go
 
 docker-build: ## Build docker image.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build -t ${IMG} -f images/registry-operator/Dockerfile .
 
 docker-push: ## Push docker image.
 	$(CONTAINER_TOOL) push ${IMG}
+
+##@ Dependency Management
+
+mod-tidy: ## Run go mod tidy.
+	cd $(SRC_DIR) && go mod tidy
 
 ##@ Deployment
 

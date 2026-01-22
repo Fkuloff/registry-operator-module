@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"kube-controller/api/v1alpha1"
-	"kube-controller/internal/controller"
+	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
+	"registry-operator/internal/controller"
 )
 
 var scheme = runtime.NewScheme()
