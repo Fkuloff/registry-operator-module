@@ -18,25 +18,32 @@ Kubernetes operator for scanning Docker registries and tracking available image 
 - Deckhouse Kubernetes Platform 1.61+
 - werf 2.x (for building)
 - crane (for publishing)
-- Go 1.23+ (for local development)
+- Go 1.24+ (for local development)
 
 ### Local Development
 
 ```bash
 # Install dependencies
+cd images/registry-operator/src
 go mod tidy
 
-# Generate DeepCopy methods
-go generate ./...
-
 # Build binary
-go build -o bin/controller cmd/main.go
+go build -o ../../../bin/registry-operator ./cmd/main.go
 
 # Run locally (requires kubeconfig)
-go run cmd/main.go
+go run ./cmd/main.go
 
 # Run tests
 go test ./... -v
+```
+
+Or using Makefile from project root:
+
+```bash
+make mod-tidy    # Install dependencies
+make build       # Build binary
+make run         # Run locally
+make test        # Run tests
 ```
 
 ### Deployment to Deckhouse
@@ -104,62 +111,21 @@ kubectl get modulereleases | grep registry
 kubectl get pods -n d8-registry-operator
 ```
 
-## Project Structure
-
-```
-registry-operator/
-├── cmd/main.go                    # Application entry point
-├── api/v1alpha1/                  # API types (CRD definitions)
-│   ├── groupversion_info.go
-│   ├── registry_types.go
-│   └── zz_generated.deepcopy.go
-├── internal/                      # Private application code
-│   ├── controller/                # Controller reconciliation logic
-│   └── registry/                  # Docker Registry HTTP client
-│
-├── .werf/stages/                  # Werf build stages
-│   ├── base-images.yaml           # Base images (ALPINE, GOLANG, SCRATCH)
-│   ├── images.yaml                # Application images
-│   ├── images-digests.yaml        # Image digests collection
-│   ├── bundle.yaml                # Module bundle
-│   └── release.yaml               # Release versioning
-│
-├── charts/                        # Helm dependencies
-│   └── deckhouse_lib_helm-*.tgz   # Deckhouse Helm library
-├── crds/                          # CRD manifests
-├── templates/                     # Helm templates
-├── hooks/                         # Module hooks
-├── images/controller/             # Container image build
-│   ├── Dockerfile
-│   └── werf.inc.yaml
-├── openapi/                       # Module configuration schemas
-│   ├── config-values.yaml
-│   └── values.yaml
-│
-├── Chart.yaml                     # Helm chart metadata
-├── module.yaml                    # Deckhouse module metadata
-├── values.yaml                    # Helm values
-├── werf.yaml                      # Werf configuration
-├── werf-giterminism.yaml          # Werf giterminism settings
-├── base_images.yml                # Base images definition
-└── README.md                      # This file
-```
-
 ## Architecture
 
 The operator consists of three main components:
 
-1. **Registry Controller** (`internal/controller/registry_controller.go`)
+1. **Registry Controller** (`images/registry-operator/src/internal/controller/registry_controller.go`)
    - Watches Registry custom resources
    - Triggers scans at configured intervals
    - Updates resource status with scan results
 
-2. **Registry HTTP Client** (`internal/registry/client.go`)
+2. **Registry HTTP Client** (`images/registry-operator/src/internal/registry/client.go`)
    - Communicates with Docker Registry API v2
    - Handles authentication (Basic, Bearer tokens)
    - Retrieves image manifests and metadata
 
-3. **CRD Definition** (`api/v1alpha1/registry_types.go`)
+3. **CRD Definition** (`images/registry-operator/src/apis/registry.kubecontroller.io/v1alpha1/registry_types.go`)
    - Defines the Registry resource schema
    - Spec: user-defined configuration
    - Status: scan results and metadata
@@ -342,14 +308,26 @@ kubectl logs -n d8-system -l app=deckhouse --tail=100 | grep registry-operator
 
 ### Commands
 
+From project root:
 ```bash
-go mod tidy                              # Install dependencies
-go generate ./...                        # Generate DeepCopy methods
-go build -o bin/controller cmd/main.go   # Build binary
-go run cmd/main.go                       # Run locally
-go test ./... -v                         # Run tests
-go fmt ./...                             # Format code
-go vet ./...                             # Static analysis
+make mod-tidy    # Install dependencies
+make generate    # Generate DeepCopy methods
+make manifests   # Generate CRD manifests
+make build       # Build binary to bin/registry-operator
+make run         # Run locally
+make test        # Run tests
+make fmt         # Format code
+make vet         # Static analysis
+```
+
+From `images/registry-operator/src/`:
+```bash
+go mod tidy                                    # Install dependencies
+go build -o ../../../bin/registry-operator ./cmd/main.go  # Build binary
+go run ./cmd/main.go                           # Run locally
+go test ./... -v                               # Run tests
+go fmt ./...                                   # Format code
+go vet ./...                                   # Static analysis
 ```
 
 ### Build Module

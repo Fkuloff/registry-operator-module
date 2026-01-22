@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"kube-controller/api/v1alpha1"
-	"kube-controller/internal/registry"
+	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
+	"registry-operator/internal/registry"
 )
 
 const defaultScanInterval = 300
