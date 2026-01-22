@@ -47,3 +47,6 @@ kubeconfig
 !README.md
 
 .claude
+
+images_tags_werf.json
+base_images.yml

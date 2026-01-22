@@ -1,6 +1,0 @@
-# REGISTRY_PATH is a special key which is concatenated with other base images
-REGISTRY_PATH: "registry.deckhouse.io/base_images/"
-
-ALPINE: "alpine:3.20.3@sha256:41628df7c9b935d248f64542634e7a843f9bc7f2252d7f878e77f7b79a947466"
-GOLANG: "golang:1.23.6-alpine3.20@sha256:3058c63e0e2532881949c4186414baa24a0f9a8f9349b1853daa49be816f42e9"
-SCRATCH: "scratch@sha256:653ae76965c98c8cd1c8c9ff7725316d2983986f896655b30e0f44d2f8b2dd7e"
