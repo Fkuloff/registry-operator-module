@@ -25,44 +25,48 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr = flag.String("metrics-bind-address", ":8080", "metrics endpoint address")
-		probeAddr   = flag.String("health-probe-bind-address", ":8081", "health probe address")
-		leaderElect = flag.Bool("leader-elect", false, "enable leader election")
+		metricsAddr          = flag.String("metrics-bind-address", ":8080", "address for metrics endpoint")
+		probeAddr            = flag.String("health-probe-bind-address", ":8081", "address for health probe endpoint")
+		enableLeaderElection = flag.Bool("leader-elect", false, "enable leader election for controller manager")
+		developmentMode      = flag.Bool("development", false, "enable development mode logging")
 	)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
-	log := ctrl.Log.WithName("setup")
+	zapOptions := zap.Options{Development: *developmentMode}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOptions)))
+
+	setupLog := ctrl.Log.WithName("setup")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: *metricsAddr},
 		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         *leaderElect,
-		LeaderElectionID:       "registry-controller-lock",
+		LeaderElection:         *enableLeaderElection,
+		LeaderElectionID:       "registry-controller.kubecontroller.io",
 	})
 	if err != nil {
-		log.Error(err, "unable to create manager")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	if err := (&controller.RegistryReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "unable to create controller")
+	if err := controller.SetupRegistryController(mgr); err != nil {
+		setupLog.Error(err, "unable to setup controller", "controller", "Registry")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		log.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		log.Error(err, "unable to set up ready check")
+		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
 
-	log.Info("starting manager")
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		log.Error(err, "manager exited with error")
+		setupLog.Error(err, "manager exited with error")
 		os.Exit(1)
 	}
 }
