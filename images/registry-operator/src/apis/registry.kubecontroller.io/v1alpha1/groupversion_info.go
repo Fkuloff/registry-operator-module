@@ -1,5 +1,8 @@
 // +kubebuilder:object:generate=true
 // +groupName=registry.kubecontroller.io
+
+// Package v1alpha1 contains API Schema definitions for the registry v1alpha1 API group.
+// This package registers the Registry and RegistryList types with the controller-runtime scheme.
 package v1alpha1
 
 import (
@@ -8,9 +11,14 @@ import (
 )
 
 var (
-	GroupVersion  = schema.GroupVersion{Group: "registry.kubecontroller.io", Version: "v1alpha1"}
+	// GroupVersion is group version used to register these objects.
+	GroupVersion = schema.GroupVersion{Group: "registry.kubecontroller.io", Version: "v1alpha1"}
+
+	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
-	AddToScheme   = SchemeBuilder.AddToScheme
+
+	// AddToScheme adds the types in this group-version to the given scheme.
+	AddToScheme = SchemeBuilder.AddToScheme
 )
 
 func init() {

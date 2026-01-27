@@ -1,61 +1,95 @@
+// Package registry provides a client for interacting with Docker Registry API v2.
 package registry
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
+const _defaultTimeout = 30 * time.Second
+
+// Client provides methods for interacting with a Docker registry.
 type Client struct {
 	registryURL   string
 	remoteOptions []remote.Option
 }
 
+// ImageDetails contains metadata about a container image.
 type ImageDetails struct {
 	Tag    string
 	Digest string
 	Size   int64
 }
 
-func NewClient(registryURL, username, password string, insecureSkipVerify bool) *Client {
-	authenticator := authn.Anonymous
+// ClientOption configures a Client using the functional options pattern.
+type ClientOption func(*clientConfig)
+
+type clientConfig struct {
+	timeout time.Duration
+}
+
+// WithTimeout sets the HTTP timeout for registry requests.
+func WithTimeout(timeout time.Duration) ClientOption {
+	return func(c *clientConfig) {
+		c.timeout = timeout
+	}
+}
+
+// NewClient creates a new registry client with the specified credentials and options.
+// If username is empty, anonymous authentication is used.
+func NewClient(registryURL, username, password string, insecureSkipVerify bool, opts ...ClientOption) *Client {
+	cfg := &clientConfig{
+		timeout: _defaultTimeout,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	auth := authn.Anonymous
 	if username != "" {
-		authenticator = authn.FromConfig(authn.AuthConfig{
+		auth = authn.FromConfig(authn.AuthConfig{
 			Username: username,
 			Password: password,
 		})
 	}
 
-	remoteOptions := []remote.Option{
-		remote.WithAuth(authenticator),
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+		DialContext: (&net.Dialer{
+			Timeout: cfg.timeout,
+		}).DialContext,
+		ResponseHeaderTimeout: cfg.timeout,
 	}
 
-	if insecureSkipVerify {
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		remoteOptions = append(remoteOptions, remote.WithTransport(transport))
+	remoteOpts := []remote.Option{
+		remote.WithAuth(auth),
+		remote.WithTransport(transport),
 	}
 
 	return &Client{
 		registryURL:   registryURL,
-		remoteOptions: remoteOptions,
+		remoteOptions: remoteOpts,
 	}
 }
 
+// ListTags returns all available tags for the specified repository.
 func (c *Client) ListTags(ctx context.Context, repository string) ([]string, error) {
 	repo, err := c.parseRepository(repository)
 	if err != nil {
 		return nil, err
 	}
 
-	options := c.buildOptions(ctx)
-	tags, err := remote.List(repo, options...)
+	opts := c.buildOptions(ctx)
+	tags, err := remote.List(repo, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
@@ -63,52 +97,61 @@ func (c *Client) ListTags(ctx context.Context, repository string) ([]string, err
 	return tags, nil
 }
 
+// GetImageDetails fetches the digest and total size for a specific image tag.
 func (c *Client) GetImageDetails(ctx context.Context, repository, tag string) (*ImageDetails, error) {
 	tagRef, err := c.parseTag(repository, tag)
 	if err != nil {
 		return nil, err
 	}
 
-	options := c.buildOptions(ctx)
-	descriptor, err := remote.Get(tagRef, options...)
+	opts := c.buildOptions(ctx)
+	desc, err := remote.Get(tagRef, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("get image: %w", err)
 	}
 
-	image, err := descriptor.Image()
+	img, err := desc.Image()
 	if err != nil {
 		return nil, fmt.Errorf("parse image: %w", err)
 	}
 
-	manifest, err := image.Manifest()
+	manifest, err := img.Manifest()
 	if err != nil {
 		return nil, fmt.Errorf("get manifest: %w", err)
 	}
 
-	totalSize := manifest.Config.Size
+	var totalSize int64 = manifest.Config.Size
 	for _, layer := range manifest.Layers {
 		totalSize += layer.Size
 	}
 
 	return &ImageDetails{
 		Tag:    tag,
-		Digest: descriptor.Digest.String(),
+		Digest: desc.Digest.String(),
 		Size:   totalSize,
 	}, nil
 }
 
+// buildOptions creates a copy of remote options with the provided context.
 func (c *Client) buildOptions(ctx context.Context) []remote.Option {
-	options := make([]remote.Option, len(c.remoteOptions), len(c.remoteOptions)+1)
-	copy(options, c.remoteOptions)
-	return append(options, remote.WithContext(ctx))
+	opts := make([]remote.Option, len(c.remoteOptions), len(c.remoteOptions)+1)
+	copy(opts, c.remoteOptions)
+	return append(opts, remote.WithContext(ctx))
 }
 
+// parseRepository constructs a full repository reference.
 func (c *Client) parseRepository(repository string) (name.Repository, error) {
-	fullPath := fmt.Sprintf("%s/%s", c.registryURL, repository)
-	return name.NewRepository(fullPath, name.Insecure)
+	host := stripScheme(c.registryURL)
+	return name.NewRepository(fmt.Sprintf("%s/%s", host, repository), name.Insecure)
 }
 
+// parseTag constructs a full tag reference.
 func (c *Client) parseTag(repository, tag string) (name.Tag, error) {
-	fullRef := fmt.Sprintf("%s/%s:%s", c.registryURL, repository, tag)
-	return name.NewTag(fullRef, name.Insecure)
+	host := stripScheme(c.registryURL)
+	return name.NewTag(fmt.Sprintf("%s/%s:%s", host, repository, tag), name.Insecure)
+}
+
+// stripScheme removes the http:// or https:// prefix from a URL.
+func stripScheme(url string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(url, "https://"), "http://")
 }

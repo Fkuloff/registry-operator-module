@@ -1,0 +1,14 @@
+# Tag filtering: only semver tags, exclude alpine, limit to 10 newest
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-filtered
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 300
+  tagFilter:
+    include: "^[0-9]+\\.[0-9]+\\.[0-9]+$"  # semver only
+    exclude: ".*alpine.*"                    # no alpine variants
+    limit: 10
+    sortBy: newest
