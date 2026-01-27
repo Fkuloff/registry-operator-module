@@ -44,9 +44,8 @@ kubeconfig
 !.env.example
 
 *.md
+!/docs/*.md
 !README.md
-
-.claude
 
 images_tags_werf.json
 base_images.yml

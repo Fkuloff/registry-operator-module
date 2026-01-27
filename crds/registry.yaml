@@ -65,11 +65,74 @@ spec:
                 type: boolean
               repository:
                 type: string
+              scanConfig:
+                description: ScanConfig defines dynamic scan settings
+                properties:
+                  concurrency:
+                    description: Number of concurrent requests when fetching image
+                      details
+                    type: integer
+                  retryAttempts:
+                    description: Number of retry attempts on failure
+                    type: integer
+                  retryDelay:
+                    description: Delay between retry attempts (e.g., "5s", "10s")
+                    type: string
+                  timeout:
+                    description: Timeout for HTTP requests to registry (e.g., "30s",
+                      "1m")
+                    type: string
+                type: object
               scanInterval:
                 format: int64
                 type: integer
+              tagFilter:
+                description: TagFilter defines filtering rules for tags
+                properties:
+                  exclude:
+                    description: Regex pattern to exclude tags (e.g., ".*-alpha.*")
+                    type: string
+                  include:
+                    description: Regex pattern to include tags (e.g., "^v[0-9]+\\.[0-9]+")
+                    type: string
+                  limit:
+                    description: Maximum number of tags to return (0 = unlimited)
+                    type: integer
+                  sortBy:
+                    description: 'Sort order: "newest", "oldest", "alphabetical" (default:
+                      "alphabetical")'
+                    type: string
+                type: object
               url:
                 type: string
+              vulnerabilityScanning:
+                description: VulnerabilityScanConfig defines vulnerability scanning
+                  settings
+                properties:
+                  enabled:
+                    description: Enable vulnerability scanning
+                    type: boolean
+                  ignoreUnfixed:
+                    description: Ignore vulnerabilities without a fix
+                    type: boolean
+                  scanInterval:
+                    description: Scan interval in seconds (separate from tag scanning,
+                      typically longer)
+                    format: int64
+                    type: integer
+                  scanner:
+                    description: 'Scanner to use: "trivy" (default)'
+                    type: string
+                  severityThreshold:
+                    description: 'Minimum severity to report: "CRITICAL", "HIGH",
+                      "MEDIUM", "LOW", "UNKNOWN"'
+                    type: string
+                  tags:
+                    description: Only scan specific tags (if empty, scans all)
+                    items:
+                      type: string
+                    type: array
+                type: object
             required:
             - repository
             - url
@@ -86,6 +149,58 @@ spec:
                       type: integer
                     tag:
                       type: string
+                    vulnerabilities:
+                      description: VulnerabilitySummary contains vulnerability scan
+                        results
+                      properties:
+                        critical:
+                          description: Counts by severity
+                          type: integer
+                        high:
+                          type: integer
+                        lastScanTime:
+                          description: Last vulnerability scan time
+                          format: date-time
+                          type: string
+                        low:
+                          type: integer
+                        medium:
+                          type: integer
+                        topCVEs:
+                          description: Top critical/high CVEs for quick reference
+                          items:
+                            description: CVEInfo contains details about a specific
+                              vulnerability
+                            properties:
+                              fixedVersion:
+                                description: Version that fixes the vulnerability
+                                type: string
+                              id:
+                                description: CVE identifier (e.g., "CVE-2024-1234")
+                                type: string
+                              installedVersion:
+                                description: Currently installed version
+                                type: string
+                              package:
+                                description: Affected package name
+                                type: string
+                              severity:
+                                description: Severity level
+                                type: string
+                              title:
+                                description: Short description
+                                type: string
+                            required:
+                            - id
+                            - package
+                            - severity
+                            type: object
+                          type: array
+                        total:
+                          type: integer
+                        unknown:
+                          type: integer
+                      type: object
                   required:
                   - tag
                   type: object

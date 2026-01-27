@@ -1,140 +1,58 @@
-# Registry Operator - Deckhouse Module
+<p align="center">
+  <img src="https://kubernetes.io/images/kubernetes-horizontal-color.png" width="300" alt="Kubernetes">
+</p>
 
-Kubernetes operator for scanning Docker registries and tracking available image versions. Packaged as a Deckhouse module.
+<h1 align="center">Registry Operator</h1>
+
+<p align="center">
+  <strong>Kubernetes operator for automated container registry scanning and vulnerability detection</strong>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#configuration">Configuration</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/kubernetes-1.27+-blue?logo=kubernetes&logoColor=white" alt="Kubernetes 1.27+">
+  <img src="https://img.shields.io/badge/go-1.24+-00ADD8?logo=go&logoColor=white" alt="Go 1.24+">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License MIT">
+  <img src="https://img.shields.io/badge/deckhouse-compatible-orange" alt="Deckhouse Compatible">
+</p>
+
+---
+
+## Overview
+
+Registry Operator is a Kubernetes-native solution for monitoring container registries. It automatically discovers image tags, collects metadata, and optionally scans for vulnerabilities using [Trivy](https://trivy.dev).
 
 ## Features
 
-- **Automatic Registry Scanning**: Periodically polls Docker registries for new image versions
-- **Image Metadata Collection**: Extracts tags, digests (SHA256), and sizes for each image
-- **Private Registry Support**: Works with authenticated registries using Kubernetes Secrets
-- **Flexible Configuration**: Configurable scan intervals and TLS settings
-- **Deckhouse Integration**: Full integration with Deckhouse Kubernetes Platform
+| Feature | Description |
+|---------|-------------|
+| **Registry Scanning** | Periodically polls Docker registries for image tags |
+| **Metadata Collection** | Extracts digests (SHA256) and sizes for each image |
+| **Vulnerability Detection** | Integrates with Trivy for CVE scanning |
+| **Tag Filtering** | Include/exclude by regex, limit count, sort order |
+| **Private Registries** | Supports authentication via Kubernetes Secrets |
+| **Deckhouse Integration** | Deploy as a Deckhouse module |
 
-## Quick Start
-
-### Prerequisites
-
-- Kubernetes 1.27+
-- Deckhouse Kubernetes Platform 1.61+
-- werf 2.x (for building)
-- crane (for publishing)
-- Go 1.24+ (for local development)
-
-### Local Development
+## Installation
 
 ```bash
-# Install dependencies
+# Apply CRD
+kubectl apply -f crds/registry.yaml
+
+# Run operator
 cd images/registry-operator/src
-go mod tidy
-
-# Build binary
-go build -o ../../../bin/registry-operator ./cmd/main.go
-
-# Run locally (requires kubeconfig)
 go run ./cmd/main.go
-
-# Run tests
-go test ./... -v
 ```
 
-Or using Makefile from project root:
+## Usage
 
-```bash
-make mod-tidy    # Install dependencies
-make build       # Build binary
-make run         # Run locally
-make test        # Run tests
-```
-
-### Deployment to Deckhouse
-
-See the Quick deployment section below.
-
-**Quick deployment:**
-
-```bash
-# 1. Set variables
-export VERSION="v1.0.0"
-export REGISTRY_IP=$(hostname -I | awk '{print $1}')
-export REGISTRY="${REGISTRY_IP}:5000/modules/registry-operator"
-
-# 2. Build module
-MODULES_MODULE_TAG=${VERSION} werf build \
-  --repo $REGISTRY \
-  --save-build-report \
-  --build-report-path images_tags_werf.json \
-  --dev
-
-# 3. Publish to registry
-BUNDLE_IMAGE=$(cat images_tags_werf.json | jq -r '.Images.bundle.DockerImageName')
-RELEASE_IMAGE=$(cat images_tags_werf.json | jq -r '.Images."release-channel-version".DockerImageName')
-
-crane copy $BUNDLE_IMAGE $REGISTRY:${VERSION}
-crane copy $RELEASE_IMAGE $REGISTRY/release:${VERSION}
-crane copy $REGISTRY/release:${VERSION} $REGISTRY/release:stable
-
-# 4. Install in cluster
-kubectl apply -f - <<EOF
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleSource
-metadata:
-  name: registry-operator
-spec:
-  registry:
-    repo: ${REGISTRY_IP}:5000/modules
-    scheme: HTTP
-EOF
-
-kubectl apply -f - <<EOF
-apiVersion: deckhouse.io/v1alpha2
-kind: ModuleUpdatePolicy
-metadata:
-  name: registry-operator
-spec:
-  releaseChannel: Stable
-  update:
-    mode: Auto
-EOF
-
-kubectl apply -f - <<EOF
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: registry-operator
-spec:
-  enabled: true
-  version: 1
-EOF
-
-# 5. Check status
-kubectl get modulereleases | grep registry
-kubectl get pods -n d8-registry-operator
-```
-
-## Architecture
-
-The operator consists of three main components:
-
-1. **Registry Controller** (`images/registry-operator/src/internal/controller/registry_controller.go`)
-   - Watches Registry custom resources
-   - Triggers scans at configured intervals
-   - Updates resource status with scan results
-
-2. **Registry HTTP Client** (`images/registry-operator/src/internal/registry/client.go`)
-   - Communicates with Docker Registry API v2
-   - Handles authentication (Basic, Bearer tokens)
-   - Retrieves image manifests and metadata
-
-3. **CRD Definition** (`images/registry-operator/src/apis/registry.kubecontroller.io/v1alpha1/registry_types.go`)
-   - Defines the Registry resource schema
-   - Spec: user-defined configuration
-   - Status: scan results and metadata
-
-The module integrates with Deckhouse through werf build stages, Helm templates, and the deckhouse_lib_helm library.
-
-## Usage Examples
-
-### Scanning Docker Hub
+### Basic Example
 
 ```yaml
 apiVersion: registry.kubecontroller.io/v1alpha1
@@ -144,10 +62,26 @@ metadata:
 spec:
   url: https://registry-1.docker.io
   repository: library/nginx
-  scanInterval: 300  # seconds
+  scanInterval: 300
 ```
 
-### Scanning Private Registry
+### With Tag Filtering
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-stable
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  tagFilter:
+    include: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    limit: 10
+    sortBy: newest
+```
+
+### Private Registry
 
 ```yaml
 apiVersion: v1
@@ -165,186 +99,51 @@ metadata:
 spec:
   url: https://registry.example.com
   repository: company/app
-  scanInterval: 600
   credentialsSecret:
     name: registry-creds
+```
+
+### Vulnerability Scanning
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-secure
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  tagFilter:
+    limit: 5
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: HIGH
+    ignoreUnfixed: true
 ```
 
 ### Check Status
 
 ```bash
 kubectl get registries
-
-# NAME      URL                              REPOSITORY      STATUS    AGE
-# nginx     https://registry-1.docker.io     library/nginx   Success   5m
-
 kubectl get registry nginx -o yaml
-```
-
-Status output:
-```yaml
-status:
-  lastScanStatus: Success
-  lastScanTime: "2026-01-21T10:30:00Z"
-  images:
-  - tag: latest
-    digest: sha256:abc123...
-    size: 142857392
-  - tag: "1.25.3"
-    digest: sha256:def456...
-    size: 142834512
 ```
 
 ## Configuration
 
-### Registry Spec
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `url` | string | yes | Registry URL (e.g., `https://registry-1.docker.io`) |
-| `repository` | string | yes | Repository to scan (e.g., `library/nginx`) |
-| `scanInterval` | int64 | no | Scan interval in seconds (default: 300) |
-| `credentialsSecret` | object | no | Reference to Secret with credentials |
-| `insecureSkipVerify` | bool | no | Skip TLS certificate verification |
-
-### Module Configuration
-
-When deployed as a Deckhouse module, configure via ModuleConfig:
-
-```yaml
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: registry-operator
-spec:
-  enabled: true
-  version: 1
-  settings:
-    logLevel: info              # debug, info, warn, error
-    nodeSelector:               # Optional pod placement
-      node-role: control-plane
-```
-
-See [openapi/config-values.yaml](openapi/config-values.yaml) for all available settings.
-
-## Monitoring
-
-```bash
-# Module status
-kubectl get modulesource registry-operator
-kubectl get modulereleases | grep registry
-kubectl get moduleconfig registry-operator
-
-# Pod status
-kubectl get pods -n d8-registry-operator
-kubectl get all -n d8-registry-operator
-
-# Logs
-kubectl logs -n d8-registry-operator -l app=registry-operator -f
-
-# Registry resources
-kubectl get registries -A
-
-# Events
-kubectl get events -n d8-registry-operator --sort-by='.lastTimestamp'
-
-# Registry images in repository
-crane ls ${REGISTRY_IP}:5000/modules/registry-operator | grep -E "^v[0-9]"
-crane ls ${REGISTRY_IP}:5000/modules/registry-operator/release
-```
-
-## Troubleshooting
-
-### Controller Issues
-
-```bash
-# Check controller logs
-kubectl logs -n d8-registry-operator -l app=registry-operator --tail=100
-
-# Check pod status
-kubectl describe pod -n d8-registry-operator -l app=registry-operator
-
-# Check deployment
-kubectl get deployment -n d8-registry-operator -o wide
-```
-
-### Registry Scan Issues
-
-```bash
-# Check Registry status
-kubectl get registry <name> -o yaml
-
-# Look for error message
-kubectl get registry <name> -o jsonpath='{.status.message}'
-
-# Check scan status
-kubectl get registry <name> -o jsonpath='{.status.lastScanStatus}'
-```
-
-### Module Issues
-
-```bash
-# Check ModuleSource status
-kubectl get modulesource registry-operator -o yaml | grep -A 20 "status:"
-
-# Check ModuleRelease
-kubectl get modulereleases | grep registry
-
-# Check Deckhouse logs
-kubectl logs -n d8-system -l app=deckhouse --tail=100 | grep registry-operator
-```
-
-### Common Errors
-
-| Error | Solution |
-|-------|----------|
-| `http: server gave HTTP response to HTTPS client` | Configure containerd for insecure registry on cluster nodes |
-| `no template helm_lib_module_labels` | Ensure `charts/deckhouse_lib_helm-*.tgz` is committed to git |
-| `MODULES_MODULE_TAG must be set` | Pass env variable: `MODULES_MODULE_TAG=v1.0.0 werf build ...` |
-| `repository name not known to registry` | Check ModuleSource repo path matches published path |
-| ModuleSource doesn't see new version | Update `stable` tag: `crane copy .../release:vX.X.X .../release:stable` |
-
-## Development
-
-### Commands
-
-From project root:
-```bash
-make mod-tidy    # Install dependencies
-make generate    # Generate DeepCopy methods
-make manifests   # Generate CRD manifests
-make build       # Build binary to bin/registry-operator
-make run         # Run locally
-make test        # Run tests
-make fmt         # Format code
-make vet         # Static analysis
-```
-
-From `images/registry-operator/src/`:
-```bash
-go mod tidy                                    # Install dependencies
-go build -o ../../../bin/registry-operator ./cmd/main.go  # Build binary
-go run ./cmd/main.go                           # Run locally
-go test ./... -v                               # Run tests
-go fmt ./...                                   # Format code
-go vet ./...                                   # Static analysis
-```
-
-### Build Module
-
-```bash
-# Build with werf
-MODULES_MODULE_TAG=v1.0.0 werf build \
-  --repo $REGISTRY \
-  --save-build-report \
-  --build-report-path images_tags_werf.json \
-  --dev
-
-# Publish images
-crane copy <bundle-image> $REGISTRY:v1.0.0
-crane copy <release-image> $REGISTRY/release:v1.0.0
-crane copy $REGISTRY/release:v1.0.0 $REGISTRY/release:stable
-```
+| Field | Type | Required | Default | Description |
+|-------|------|:--------:|---------|-------------|
+| `url` | string | ✓ | - | Registry URL |
+| `repository` | string | ✓ | - | Repository path |
+| `scanInterval` | int64 | | 300 | Scan interval (seconds) |
+| `credentialsSecret.name` | string | | - | Secret with credentials |
+| `insecureSkipVerify` | bool | | false | Skip TLS verification |
+| `tagFilter.include` | string | | - | Include regex |
+| `tagFilter.exclude` | string | | - | Exclude regex |
+| `tagFilter.limit` | int | | 0 | Max tags (0=unlimited) |
+| `tagFilter.sortBy` | string | | alphabetical | newest/oldest/alphabetical |
+| `vulnerabilityScanning.enabled` | bool | | false | Enable Trivy scanning |
+| `vulnerabilityScanning.severityThreshold` | string | | MEDIUM | CRITICAL/HIGH/MEDIUM/LOW |
+| `vulnerabilityScanning.ignoreUnfixed` | bool | | false | Skip unfixed CVEs |
 
 ## License
 

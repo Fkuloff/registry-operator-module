@@ -1,0 +1,9 @@
+# Basic example: scan Docker Hub nginx repository
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 300

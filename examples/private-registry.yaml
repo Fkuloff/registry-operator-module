@@ -1,0 +1,30 @@
+# Private registry with authentication
+#
+# First, create the secret:
+#   kubectl create secret generic registry-creds \
+#     --from-literal=username=myuser \
+#     --from-literal=password=mypass
+#
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-creds
+type: Opaque
+stringData:
+  username: myuser
+  password: mypass
+---
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: private-app
+spec:
+  url: https://registry.example.com
+  repository: company/app
+  scanInterval: 600
+  credentialsSecret:
+    name: registry-creds
+    usernameKey: username  # optional, default: "username"
+    passwordKey: password  # optional, default: "password"
+  insecureSkipVerify: false
