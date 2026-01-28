@@ -91,9 +91,6 @@ spec:
     # SBOM format: syft-json, spdx-json, cyclonedx-json
     format: spdx-json
 
-    # Include license information in SBOM
-    includeLicenses: true
-
     # SBOM generation interval in seconds (default: 3600)
     scanInterval: 7200
 

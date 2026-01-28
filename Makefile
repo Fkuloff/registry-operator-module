@@ -35,6 +35,12 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	cd $(SRC_DIR) && go vet ./...
 
+lint: golangci-lint ## Run golangci-lint.
+	cd $(SRC_DIR) && $(GOLANGCI_LINT) run --config ../../../.golangci.yml ./...
+
+lint-fix: golangci-lint ## Run golangci-lint with auto-fix.
+	cd $(SRC_DIR) && $(GOLANGCI_LINT) run --config ../../../.golangci.yml --fix ./...
+
 test: fmt vet ## Run tests.
 	cd $(SRC_DIR) && go test ./... -v
 
@@ -72,3 +78,9 @@ CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	@test -s $(CONTROLLER_GEN) || \
 	GOBIN=$(shell pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
+.PHONY: golangci-lint
+golangci-lint: ## Download golangci-lint locally if necessary.
+	@test -s $(GOLANGCI_LINT) || \
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell pwd)/bin

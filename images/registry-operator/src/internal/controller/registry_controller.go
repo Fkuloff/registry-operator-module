@@ -656,9 +656,8 @@ func (r *RegistryReconciler) scanSBOM(
 	}
 
 	scanner := sbom.NewScanner(sbom.SyftConfig{
-		Format:          sbomConfig.Format,
-		IncludeLicenses: sbomConfig.IncludeLicenses,
-		Timeout:         5 * time.Minute,
+		Format:  sbomConfig.Format,
+		Timeout: 5 * time.Minute,
 	})
 
 	analyzer := sbom.NewAnalyzer()
@@ -698,15 +697,6 @@ func (r *RegistryReconciler) scanSBOM(
 			"totalPackages", sbomInfo.TotalPackages,
 			"packageTypes", len(sbomInfo.PackageTypes),
 		)
-
-		if sbomInfo.Licenses != nil {
-			logger.Info("license summary",
-				"image", imageRef,
-				"total", sbomInfo.Licenses.Total,
-				"unknown", sbomInfo.Licenses.Unknown,
-				"riskyLicenses", len(sbomInfo.Licenses.RiskyLicenses),
-			)
-		}
 	}
 
 	return images

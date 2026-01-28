@@ -22,7 +22,7 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
 │  │          │─▶│  Client  │  │ Scanner  │  │ Scanner  │            │
 │  │- Watch CR│  │- List    │  │- Trivy   │  │- Syft    │            │
 │  │- Orch.   │  │- Manifest│  │- CVEs    │  │- Packages│            │
-│  │- Status  │  │- Auth    │  │- Summary │  │- Licenses│            │
+│  │- Status  │  │- Auth    │  │- Summary │  │- Types   │            │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
 │       │                │             │             │                 │
 │       │                │         ┌───┴─────────────┴───┐            │
@@ -199,8 +199,7 @@ Syft CLI wrapper in `internal/sbom/scanner.go`.
 Features:
 - Executes `syft scan` as subprocess
 - Supports multiple formats (SPDX, CycloneDX, Syft JSON)
-- License extraction and analysis
-- Identifies risky copyleft licenses (GPL, AGPL)
+- Package metadata extraction (name, version, type)
 
 ### SBOM Analyzer
 
@@ -263,7 +262,7 @@ Features:
 | `digest` | string | SHA256 digest |
 | `size` | int64 | Total size in bytes |
 | `vulnerabilities` | object | CVE summary (if scanned) |
-| `sbom` | object | SBOM data with packages, licenses, dependencies |
+| `sbom` | object | SBOM data with packages and dependencies |
 
 ## Concurrency Model
 

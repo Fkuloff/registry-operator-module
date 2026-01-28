@@ -4,6 +4,7 @@ package sbom
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -21,9 +22,6 @@ type SyftConfig struct {
 
 	// Timeout is the maximum time to wait for SBOM generation.
 	Timeout time.Duration
-
-	// IncludeLicenses includes license information.
-	IncludeLicenses bool
 }
 
 // Scanner generates SBOM for container images.
@@ -58,6 +56,11 @@ func (s *Scanner) Scan(ctx context.Context, imageRef string) (*v1alpha1.SBOMInfo
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
+	// Validate imageRef to prevent command injection
+	if strings.ContainsAny(imageRef, "&|;<>$`\n") {
+		return nil, fmt.Errorf("invalid image reference: contains prohibited characters")
+	}
+
 	args := []string{
 		"scan",
 		imageRef,
@@ -65,11 +68,14 @@ func (s *Scanner) Scan(ctx context.Context, imageRef string) (*v1alpha1.SBOMInfo
 		"--quiet",
 	}
 
+	// #nosec G204 -- imageRef is validated above to prevent injection, and syft is a required
+	// external tool for SBOM generation. Arguments are constructed from validated inputs only.
 	cmd := exec.CommandContext(ctx, "syft", args...)
 
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return nil, fmt.Errorf("syft scan failed: %w (stderr: %s)", err, string(exitErr.Stderr))
 		}
 		return nil, fmt.Errorf("syft scan failed: %w", err)
@@ -84,14 +90,9 @@ type syftDocument struct {
 }
 
 type syftArtifact struct {
-	Name     string        `json:"name"`
-	Version  string        `json:"version"`
-	Type     string        `json:"type"`
-	Licenses []syftLicense `json:"licenses"`
-}
-
-type syftLicense struct {
-	Value string `json:"value"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Type    string `json:"type"`
 }
 
 // parseSyftOutput parses Syft JSON output into SBOMInfo.
@@ -110,29 +111,12 @@ func (s *Scanner) parseSyftOutput(output []byte) (*v1alpha1.SBOMInfo, error) {
 	}
 
 	packages := make([]v1alpha1.PackageInfo, 0, len(doc.Artifacts))
-	licenseMap := make(map[string]int)
-	var totalLicensed int
 
 	for _, artifact := range doc.Artifacts {
 		pkg := v1alpha1.PackageInfo{
 			Name:    artifact.Name,
 			Version: artifact.Version,
 			Type:    artifact.Type,
-		}
-
-		// Process licenses if enabled
-		if s.config.IncludeLicenses {
-			var licenses []string
-			for _, lic := range artifact.Licenses {
-				if lic.Value != "" {
-					licenses = append(licenses, lic.Value)
-					licenseMap[lic.Value]++
-				}
-			}
-			if len(licenses) > 0 {
-				pkg.License = strings.Join(licenses, ", ")
-				totalLicensed++
-			}
 		}
 
 		packages = append(packages, pkg)
@@ -144,43 +128,5 @@ func (s *Scanner) parseSyftOutput(output []byte) (*v1alpha1.SBOMInfo, error) {
 
 	sbomInfo.Packages = packages
 
-	if s.config.IncludeLicenses {
-		sbomInfo.Licenses = &v1alpha1.LicenseSummary{
-			Total:     totalLicensed,
-			Unknown:   len(doc.Artifacts) - totalLicensed,
-			ByLicense: licenseMap,
-		}
-
-		sbomInfo.Licenses.RiskyLicenses = identifyRiskyLicenses(licenseMap)
-	}
-
 	return sbomInfo, nil
-}
-
-// _riskyLicensePatterns contains patterns for licenses that may pose compliance risks.
-var _riskyLicensePatterns = []string{
-	"GPL", "AGPL", "LGPL", // Copyleft licenses
-	"SSPL",           // Server Side Public License
-	"Commons Clause", // Restrictive
-}
-
-// identifyRiskyLicenses identifies licenses that may pose compliance risks.
-func identifyRiskyLicenses(licenseMap map[string]int) []string {
-	var risky []string
-	for license := range licenseMap {
-		if isRiskyLicense(license) {
-			risky = append(risky, license)
-		}
-	}
-	return risky
-}
-
-func isRiskyLicense(license string) bool {
-	licenseUpper := strings.ToUpper(license)
-	for _, pattern := range _riskyLicensePatterns {
-		if strings.Contains(licenseUpper, pattern) {
-			return true
-		}
-	}
-	return false
 }
