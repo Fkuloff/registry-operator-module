@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"registry-operator/internal/registry"
+	"registry-operator/internal/sbom"
 	"registry-operator/internal/vulnerability"
 
 	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
@@ -35,6 +36,7 @@ const (
 	_defaultRetryDelay       = 5 * time.Second
 	_defaultConcurrency      = 1
 	_defaultVulnScanInterval = 3600
+	_defaultSBOMScanInterval = 3600
 	_registryFinalizer       = "registry.kubecontroller.io/finalizer"
 )
 
@@ -85,6 +87,10 @@ func (r *RegistryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if r.shouldScanVulnerabilities(&reg) {
 		images = r.scanVulnerabilities(ctx, logger, &reg, images)
+	}
+
+	if r.shouldScanSBOM(&reg) {
+		images = r.scanSBOM(ctx, logger, &reg, images)
 	}
 
 	if err := r.updateStatusSuccess(ctx, &reg, images); err != nil {
@@ -309,7 +315,8 @@ func (r *RegistryReconciler) filterTags(tags []string, filter *v1alpha1.TagFilte
 	return result, nil
 }
 
-// fetchImageDetails fetches details for each tag, optionally concurrently.
+// fetchImageDetails fetches details for all tags using worker pool pattern.
+// Concurrency is controlled by cfg.concurrency (defaults to 1).
 func (r *RegistryReconciler) fetchImageDetails(
 	ctx context.Context,
 	logger logr.Logger,
@@ -322,69 +329,49 @@ func (r *RegistryReconciler) fetchImageDetails(
 		return nil, nil
 	}
 
-	if cfg.concurrency <= 1 {
-		images := make([]v1alpha1.ImageInfo, 0, len(tags))
-		for _, tag := range tags {
-			info := r.fetchSingleImageDetails(ctx, logger, regClient, repository, tag, cfg)
-			images = append(images, info)
-		}
-		return images, nil
-	}
-
-	return r.fetchImageDetailsConcurrent(ctx, logger, regClient, repository, tags, cfg)
-}
-
-// fetchImageDetailsConcurrent fetches image details using worker pool.
-func (r *RegistryReconciler) fetchImageDetailsConcurrent(
-	ctx context.Context,
-	logger logr.Logger,
-	regClient *registry.Client,
-	repository string,
-	tags []string,
-	cfg resolvedScanConfig,
-) ([]v1alpha1.ImageInfo, error) {
-	type indexedResult struct {
+	type job struct {
 		index int
-		info  v1alpha1.ImageInfo
+		tag   string
 	}
 
 	results := make([]v1alpha1.ImageInfo, len(tags))
-	resultCh := make(chan indexedResult, len(tags))
-	semaphore := make(chan struct{}, cfg.concurrency)
+	jobs := make(chan job, len(tags))
 
+	// Start worker pool
 	var wg sync.WaitGroup
-	wg.Add(len(tags))
-
-	for i, tag := range tags {
-		go func(idx int, t string) {
+	for i := 0; i < cfg.concurrency; i++ {
+		wg.Add(1)
+		go func() {
 			defer wg.Done()
-
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-ctx.Done():
-				resultCh <- indexedResult{index: idx, info: v1alpha1.ImageInfo{Tag: t}}
-				return
+			for j := range jobs {
+				// Check context before processing
+				if ctx.Err() != nil {
+					results[j.index] = v1alpha1.ImageInfo{Tag: j.tag}
+					continue
+				}
+				results[j.index] = r.fetchSingleImageDetails(ctx, logger, regClient, repository, j.tag, cfg)
 			}
-
-			info := r.fetchSingleImageDetails(ctx, logger, regClient, repository, t, cfg)
-			resultCh <- indexedResult{index: idx, info: info}
-		}(i, tag)
+		}()
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultCh)
-	}()
-
-	for res := range resultCh {
-		results[res.index] = res.info
+	// Send jobs to workers
+	for i, tag := range tags {
+		select {
+		case jobs <- job{index: i, tag: tag}:
+		case <-ctx.Done():
+			// Context canceled, close jobs and let workers drain
+			close(jobs)
+			wg.Wait()
+			return results, ctx.Err()
+		}
 	}
+	close(jobs)
 
+	wg.Wait()
 	return results, nil
 }
 
-// fetchSingleImageDetails fetches details for a single image tag.
+// fetchSingleImageDetails fetches details for a single image tag with retry logic.
 func (r *RegistryReconciler) fetchSingleImageDetails(
 	ctx context.Context,
 	logger logr.Logger,
@@ -598,18 +585,130 @@ func (r *RegistryReconciler) getTagsToScan(vulnConfig *v1alpha1.VulnerabilitySca
 	if len(vulnConfig.Tags) > 0 {
 		return vulnConfig.Tags
 	}
+	return extractTags(images)
+}
 
-	tags := make([]string, len(images))
-	for i, img := range images {
-		tags[i] = img.Tag
+// extractTags extracts tag names from image list.
+func extractTags(images []v1alpha1.ImageInfo) []string {
+	tags := make([]string, 0, len(images))
+	for _, img := range images {
+		tags = append(tags, img.Tag)
 	}
 	return tags
 }
 
 // buildImageRef constructs a full image reference from registry URL, repository, and tag.
 func buildImageRef(registryURL, repository, tag string) string {
-	host := strings.TrimPrefix(strings.TrimPrefix(registryURL, "https://"), "http://")
+	host := strings.TrimPrefix(registryURL, "https://")
+	host = strings.TrimPrefix(host, "http://")
 	return fmt.Sprintf("%s/%s:%s", host, repository, tag)
+}
+
+// shouldScanSBOM checks if SBOM scanning should be performed.
+func (r *RegistryReconciler) shouldScanSBOM(reg *v1alpha1.Registry) bool {
+	sbomConfig := reg.Spec.SBOMGeneration
+	if sbomConfig == nil || !sbomConfig.Enabled {
+		return false
+	}
+
+	sbomInterval := sbomConfig.ScanInterval
+	if sbomInterval <= 0 {
+		sbomInterval = _defaultSBOMScanInterval
+	}
+
+	for _, img := range reg.Status.Images {
+		if img.SBOM == nil || img.SBOM.GeneratedAt == nil {
+			return true
+		}
+		elapsed := time.Since(img.SBOM.GeneratedAt.Time)
+		if elapsed >= time.Duration(sbomInterval)*time.Second {
+			return true
+		}
+	}
+
+	return false
+}
+
+// scanSBOM generates SBOM for images using Syft.
+func (r *RegistryReconciler) scanSBOM(
+	ctx context.Context,
+	logger logr.Logger,
+	reg *v1alpha1.Registry,
+	images []v1alpha1.ImageInfo,
+) []v1alpha1.ImageInfo {
+	sbomConfig := reg.Spec.SBOMGeneration
+	if sbomConfig == nil {
+		return images
+	}
+
+	if err := sbom.CheckSyftInstalled(); err != nil {
+		logger.Error(err, "syft not available, skipping SBOM generation")
+		return images
+	}
+
+	scanner := sbom.NewScanner(sbom.SyftConfig{
+		Format:          sbomConfig.Format,
+		IncludeLicenses: sbomConfig.IncludeLicenses,
+		Timeout:         5 * time.Minute,
+	})
+
+	analyzer := sbom.NewAnalyzer()
+
+	tagsToScan := r.getTagsToScanSBOM(sbomConfig, images)
+
+	logger.Info("starting SBOM generation",
+		"registry", reg.Spec.URL,
+		"repository", reg.Spec.Repository,
+		"tagsToScan", len(tagsToScan),
+	)
+
+	for i, img := range images {
+		if !slices.Contains(tagsToScan, img.Tag) {
+			continue
+		}
+
+		imageRef := buildImageRef(reg.Spec.URL, reg.Spec.Repository, img.Tag)
+		logger.V(1).Info("generating SBOM for image", "image", imageRef)
+
+		sbomInfo, err := scanner.Scan(ctx, imageRef)
+		if err != nil {
+			logger.Error(err, "generate SBOM: failed", "image", imageRef)
+			continue
+		}
+
+		analyzer.AnalyzeDependencies(sbomInfo)
+
+		if img.Vulnerabilities != nil {
+			analyzer.EnrichWithVulnerabilities(sbomInfo, img.Vulnerabilities)
+		}
+
+		images[i].SBOM = sbomInfo
+
+		logger.Info("SBOM generation completed",
+			"image", imageRef,
+			"totalPackages", sbomInfo.TotalPackages,
+			"packageTypes", len(sbomInfo.PackageTypes),
+		)
+
+		if sbomInfo.Licenses != nil {
+			logger.Info("license summary",
+				"image", imageRef,
+				"total", sbomInfo.Licenses.Total,
+				"unknown", sbomInfo.Licenses.Unknown,
+				"riskyLicenses", len(sbomInfo.Licenses.RiskyLicenses),
+			)
+		}
+	}
+
+	return images
+}
+
+// getTagsToScanSBOM returns the list of tags to generate SBOM for.
+func (r *RegistryReconciler) getTagsToScanSBOM(sbomConfig *v1alpha1.SBOMConfig, images []v1alpha1.ImageInfo) []string {
+	if len(sbomConfig.Tags) > 0 {
+		return sbomConfig.Tags
+	}
+	return extractTags(images)
 }
 
 // SetupRegistryController sets up the Registry controller with the Manager.

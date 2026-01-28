@@ -26,7 +26,7 @@
 
 ## Overview
 
-Registry Operator is a Kubernetes-native solution for monitoring container registries. It automatically discovers image tags, collects metadata, and optionally scans for vulnerabilities using [Trivy](https://trivy.dev).
+Registry Operator is a Kubernetes-native solution for comprehensive container registry management. It automatically discovers image tags, collects metadata, scans for vulnerabilities, and generates Software Bill of Materials (SBOM) for complete visibility into your container images.
 
 ## Features
 
@@ -34,9 +34,13 @@ Registry Operator is a Kubernetes-native solution for monitoring container regis
 |---------|-------------|
 | **Registry Scanning** | Periodically polls Docker registries for image tags |
 | **Metadata Collection** | Extracts digests (SHA256) and sizes for each image |
-| **Vulnerability Detection** | Integrates with Trivy for CVE scanning |
+| **Vulnerability Detection** | Integrates with Trivy for CVE scanning with severity filtering |
+| **SBOM Generation** | Generates Software Bill of Materials using Syft for dependency tracking |
+| **License Scanning** | Identifies licenses and flags risky copyleft licenses (GPL, AGPL) |
+| **Dependency Analysis** | Distinguishes direct vs transitive dependencies |
 | **Tag Filtering** | Include/exclude by regex, limit count, sort order |
 | **Private Registries** | Supports authentication via Kubernetes Secrets |
+| **Worker Pool Pattern** | Efficient concurrent processing with configurable parallelism |
 | **Deckhouse Integration** | Deploy as a Deckhouse module |
 
 ## Installation
@@ -121,11 +125,91 @@ spec:
     ignoreUnfixed: true
 ```
 
+### SBOM Generation
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-sbom
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  tagFilter:
+    limit: 3
+
+  # Generate SBOM for compliance and security
+  sbomGeneration:
+    enabled: true
+    format: syft-json              # Options: spdx-json, cyclonedx-json, syft-json
+    includeLicenses: true          # Include license information
+    scanInterval: 3600             # Regenerate every hour
+
+  # Combine with vulnerability scanning
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: MEDIUM
+```
+
+### Complete Example with All Features
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: production-app
+spec:
+  url: https://registry.example.com
+  repository: company/myapp
+  scanInterval: 600
+
+  credentialsSecret:
+    name: registry-creds
+
+  tagFilter:
+    include: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"  # Semantic versions only
+    limit: 10
+    sortBy: newest
+
+  scanConfig:
+    timeout: 60s
+    retryAttempts: 3
+    concurrency: 5                  # Process 5 images in parallel
+
+  vulnerabilityScanning:
+    enabled: true
+    scanner: trivy
+    severityThreshold: HIGH
+    ignoreUnfixed: false
+    scanInterval: 7200
+
+  sbomGeneration:
+    enabled: true
+    format: spdx-json
+    includeLicenses: true
+    scanInterval: 7200
+```
+
 ### Check Status
 
 ```bash
+# List all registries
 kubectl get registries
+
+# Full status with SBOM and vulnerabilities
 kubectl get registry nginx -o yaml
+
+# Quick view of vulnerabilities
+kubectl get registry nginx -o jsonpath='{.status.images[0].vulnerabilities}'
+
+# View SBOM summary
+kubectl get registry nginx -o jsonpath='{.status.images[0].sbom}' | jq .
+
+# Check for risky licenses
+kubectl get registry nginx -o jsonpath='{.status.images[*].sbom.licenses.riskyLicenses}'
+
+# Find packages with critical CVEs
+kubectl get registry nginx -o json | jq '.status.images[].sbom.packages[] | select(.critical==true)'
 ```
 
 ## Configuration
@@ -144,6 +228,62 @@ kubectl get registry nginx -o yaml
 | `vulnerabilityScanning.enabled` | bool | | false | Enable Trivy scanning |
 | `vulnerabilityScanning.severityThreshold` | string | | MEDIUM | CRITICAL/HIGH/MEDIUM/LOW |
 | `vulnerabilityScanning.ignoreUnfixed` | bool | | false | Skip unfixed CVEs |
+| `vulnerabilityScanning.scanInterval` | int64 | | 3600 | Vulnerability scan interval (seconds) |
+| `sbomGeneration.enabled` | bool | | false | Enable SBOM generation |
+| `sbomGeneration.format` | string | | syft-json | spdx-json/cyclonedx-json/syft-json |
+| `sbomGeneration.includeLicenses` | bool | | false | Include license information |
+| `sbomGeneration.scanInterval` | int64 | | 3600 | SBOM generation interval (seconds) |
+| `scanConfig.timeout` | string | | 30s | HTTP request timeout |
+| `scanConfig.retryAttempts` | int | | 3 | Retry attempts on failure |
+| `scanConfig.concurrency` | int | | 1 | Parallel image processing |
+
+## Documentation
+
+- [SBOM Feature Guide](docs/SBOM_FEATURE.md) - Complete SBOM functionality documentation
+- [Architecture](docs/architecture.md) - System architecture and components
+- [Development Guide](docs/development.md) - Development setup and workflows
+- [Deckhouse Integration](docs/deckhouse.md) - Deploy as Deckhouse module
+
+## Prerequisites
+
+### For Basic Operation
+- Kubernetes 1.27+
+- kubectl configured
+
+### For Vulnerability Scanning
+- [Trivy](https://trivy.dev) installed on the operator pod or host
+
+### For SBOM Generation
+- [Syft](https://github.com/anchore/syft) installed on the operator pod or host
+
+```bash
+# Install Trivy
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+# Install Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+# Verify installations
+trivy --version
+syft version
+```
+
+## Quick Start
+
+```bash
+# 1. Install CRDs
+kubectl apply -f crds/registry.kubecontroller.io_registries.yaml
+
+# 2. Deploy operator
+kubectl apply -f examples/deployment.yaml
+
+# 3. Create a registry resource
+kubectl apply -f examples/registry-with-sbom.yaml
+
+# 4. Check results
+kubectl get registries
+kubectl get registry nginx-with-sbom -o yaml
+```
 
 ## License
 
