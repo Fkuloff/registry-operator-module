@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"registry-operator/internal/drift"
 	"registry-operator/internal/registry"
 	"registry-operator/internal/sbom"
 	"registry-operator/internal/vulnerability"
@@ -93,7 +94,12 @@ func (r *RegistryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		images = r.scanSBOM(ctx, logger, &reg, images)
 	}
 
-	if err := r.updateStatusSuccess(ctx, &reg, images); err != nil {
+	var driftStatus *v1alpha1.DriftStatus
+	if r.shouldDetectDrift(&reg) {
+		driftStatus = r.detectDrift(ctx, logger, &reg, images)
+	}
+
+	if err := r.updateStatusSuccess(ctx, &reg, images, driftStatus); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -436,26 +442,27 @@ func (r *RegistryReconciler) handleScanFailure(ctx context.Context, reg *v1alpha
 }
 
 // updateStatusSuccess updates Registry status with successful scan results.
-func (r *RegistryReconciler) updateStatusSuccess(ctx context.Context, reg *v1alpha1.Registry, images []v1alpha1.ImageInfo) error {
-	return r.updateStatus(ctx, reg, "Success", "", images)
+func (r *RegistryReconciler) updateStatusSuccess(ctx context.Context, reg *v1alpha1.Registry, images []v1alpha1.ImageInfo, driftStatus *v1alpha1.DriftStatus) error {
+	return r.updateStatus(ctx, reg, "Success", "", images, driftStatus)
 }
 
 // updateStatusFailed updates Registry status with failure information.
 func (r *RegistryReconciler) updateStatusFailed(ctx context.Context, reg *v1alpha1.Registry, message string) error {
-	return r.updateStatus(ctx, reg, "Failed", message, nil)
+	return r.updateStatus(ctx, reg, "Failed", message, nil, nil)
 }
 
 // updateStatus updates the Registry status subresource.
-func (r *RegistryReconciler) updateStatus(ctx context.Context, reg *v1alpha1.Registry, scanStatus, message string, images []v1alpha1.ImageInfo) error {
+func (r *RegistryReconciler) updateStatus(ctx context.Context, reg *v1alpha1.Registry, scanStatus, message string, images []v1alpha1.ImageInfo, driftStatus *v1alpha1.DriftStatus) error {
 	now := metav1.Now()
 	reg.Status.LastScanTime = &now
 	reg.Status.LastScanStatus = scanStatus
 	reg.Status.Message = message
 	reg.Status.Images = images
+	reg.Status.Drift = driftStatus
 
 	err := r.client.Status().Update(ctx, reg)
 	if apierrors.IsConflict(err) {
-		return r.retryStatusUpdate(ctx, reg, scanStatus, message, images, now)
+		return r.retryStatusUpdate(ctx, reg, scanStatus, message, images, driftStatus, now)
 	}
 	return err
 }
@@ -466,6 +473,7 @@ func (r *RegistryReconciler) retryStatusUpdate(
 	reg *v1alpha1.Registry,
 	scanStatus, message string,
 	images []v1alpha1.ImageInfo,
+	driftStatus *v1alpha1.DriftStatus,
 	timestamp metav1.Time,
 ) error {
 	regKey := types.NamespacedName{
@@ -482,6 +490,7 @@ func (r *RegistryReconciler) retryStatusUpdate(
 	latest.Status.LastScanStatus = scanStatus
 	latest.Status.Message = message
 	latest.Status.Images = images
+	latest.Status.Drift = driftStatus
 
 	return r.client.Status().Update(ctx, &latest)
 }
@@ -709,6 +718,70 @@ func (r *RegistryReconciler) getTagsToScanSBOM(sbomConfig *v1alpha1.SBOMConfig, 
 		return sbomConfig.Tags
 	}
 	return extractTags(images)
+}
+
+// shouldDetectDrift checks if drift detection should run.
+func (r *RegistryReconciler) shouldDetectDrift(reg *v1alpha1.Registry) bool {
+	driftConfig := reg.Spec.DriftDetection
+	if driftConfig == nil || !driftConfig.Enabled {
+		return false
+	}
+
+	checkInterval := driftConfig.CheckInterval
+	if checkInterval <= 0 {
+		checkInterval = reg.Spec.ScanInterval
+		if checkInterval <= 0 {
+			checkInterval = _defaultScanInterval
+		}
+	}
+
+	if reg.Status.Drift == nil || reg.Status.Drift.LastCheckTime == nil {
+		return true
+	}
+
+	elapsed := time.Since(reg.Status.Drift.LastCheckTime.Time)
+	return elapsed >= time.Duration(checkInterval)*time.Second
+}
+
+// detectDrift detects drift between running workloads and available images.
+func (r *RegistryReconciler) detectDrift(
+	ctx context.Context,
+	logger logr.Logger,
+	reg *v1alpha1.Registry,
+	images []v1alpha1.ImageInfo,
+) *v1alpha1.DriftStatus {
+	driftConfig := reg.Spec.DriftDetection
+	if driftConfig == nil {
+		return nil
+	}
+
+	logger.Info("detecting drift",
+		"registry", reg.Spec.URL,
+		"repository", reg.Spec.Repository,
+		"namespaces", driftConfig.Namespaces,
+	)
+
+	scanner := drift.NewScanner(r.client)
+
+	workloads, err := scanner.ScanWorkloads(ctx, reg.Spec.Repository, driftConfig)
+	if err != nil {
+		logger.Error(err, "scan workloads failed")
+		return nil
+	}
+
+	logger.V(1).Info("found workloads", "count", len(workloads))
+
+	driftStatus := drift.AnalyzeDrift(workloads, images)
+
+	logger.Info("drift detection complete",
+		"total", driftStatus.Summary.Total,
+		"latest", driftStatus.Summary.Latest,
+		"outdated", driftStatus.Summary.Outdated,
+		"vulnerable", driftStatus.Summary.Vulnerable,
+		"urgentUpdates", driftStatus.Summary.UrgentUpdates,
+	)
+
+	return driftStatus
 }
 
 // SetupRegistryController sets up the Registry controller with the Manager.

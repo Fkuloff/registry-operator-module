@@ -40,6 +40,10 @@ type RegistrySpec struct {
 	// SBOMGeneration defines SBOM generation settings.
 	// +optional
 	SBOMGeneration *SBOMConfig `json:"sbomGeneration,omitempty"`
+
+	// DriftDetection defines drift detection settings.
+	// +optional
+	DriftDetection *DriftDetectionConfig `json:"driftDetection,omitempty"`
 }
 
 // SBOMConfig defines SBOM generation settings.
@@ -167,6 +171,10 @@ type RegistryStatus struct {
 	// Images contains information about discovered images.
 	// +optional
 	Images []ImageInfo `json:"images,omitempty"`
+
+	// Drift contains drift detection results.
+	// +optional
+	Drift *DriftStatus `json:"drift,omitempty"`
 }
 
 // ImageInfo contains information about a single image tag.
@@ -344,6 +352,123 @@ type DependencySummary struct {
 	// TopLevelPackages contains the most important packages (base OS, frameworks).
 	// +optional
 	TopLevelPackages []string `json:"topLevelPackages,omitempty"`
+}
+
+// DriftDetectionConfig defines drift detection settings.
+type DriftDetectionConfig struct {
+	// Enabled enables drift detection.
+	// When enabled, tracks Deployments, StatefulSets, and DaemonSets.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Namespaces is the list of namespaces to monitor. Empty means all namespaces.
+	// +optional
+	Namespaces []string `json:"namespaces,omitempty"`
+
+	// CheckInterval is the interval between drift checks in seconds.
+	// Defaults to scanInterval if not specified.
+	// +optional
+	CheckInterval int64 `json:"checkInterval,omitempty"`
+}
+
+// DriftStatus contains drift detection results.
+type DriftStatus struct {
+	// LastCheckTime is the timestamp of the last drift check.
+	// +optional
+	LastCheckTime *metav1.Time `json:"lastCheckTime,omitempty"`
+
+	// Workloads contains drift information for each workload.
+	// +optional
+	Workloads []WorkloadDrift `json:"workloads,omitempty"`
+
+	// Summary contains aggregated drift statistics.
+	// +optional
+	Summary *DriftSummary `json:"summary,omitempty"`
+}
+
+// WorkloadDrift contains drift information for a single workload.
+type WorkloadDrift struct {
+	// Namespace is the workload namespace.
+	Namespace string `json:"namespace"`
+
+	// Name is the workload name.
+	Name string `json:"name"`
+
+	// Kind is the workload kind (Deployment, StatefulSet, DaemonSet, etc.).
+	Kind string `json:"kind"`
+
+	// CurrentImage is the image currently used by the workload.
+	CurrentImage string `json:"currentImage"`
+
+	// CurrentTag is the parsed tag from current image.
+	// +optional
+	CurrentTag string `json:"currentTag,omitempty"`
+
+	// Status indicates drift status: "LATEST", "OUTDATED", "VULNERABLE", "UNKNOWN".
+	Status string `json:"status"`
+
+	// AvailableUpdates contains newer tags available in registry.
+	// +optional
+	AvailableUpdates []AvailableUpdate `json:"availableUpdates,omitempty"`
+
+	// Recommendation provides update guidance.
+	// +optional
+	Recommendation string `json:"recommendation,omitempty"`
+
+	// Message provides additional context or warnings.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// AvailableUpdate contains information about an available image update.
+type AvailableUpdate struct {
+	// Tag is the available tag.
+	Tag string `json:"tag"`
+
+	// Newer indicates if this tag is newer than current.
+	// +optional
+	Newer bool `json:"newer,omitempty"`
+
+	// CriticalCVEsFixed is the number of critical CVEs fixed in this version.
+	// +optional
+	CriticalCVEsFixed int `json:"criticalCVEsFixed,omitempty"`
+
+	// HighCVEsFixed is the number of high CVEs fixed in this version.
+	// +optional
+	HighCVEsFixed int `json:"highCVEsFixed,omitempty"`
+
+	// NewCVEs is the number of new CVEs introduced in this version.
+	// +optional
+	NewCVEs int `json:"newCVEs,omitempty"`
+
+	// Recommendation provides update guidance for this specific version.
+	// +optional
+	Recommendation string `json:"recommendation,omitempty"`
+
+	// SizeDiff is the size difference in bytes (negative means smaller).
+	// +optional
+	SizeDiff int64 `json:"sizeDiff,omitempty"`
+}
+
+// DriftSummary contains aggregated drift statistics.
+type DriftSummary struct {
+	// Total is the total number of workloads tracked.
+	Total int `json:"total,omitempty"`
+
+	// Latest is the number of workloads using latest available image.
+	Latest int `json:"latest,omitempty"`
+
+	// Outdated is the number of workloads with newer images available.
+	Outdated int `json:"outdated,omitempty"`
+
+	// Vulnerable is the number of workloads with critical vulnerabilities.
+	Vulnerable int `json:"vulnerable,omitempty"`
+
+	// Unknown is the number of workloads with unknown image status.
+	Unknown int `json:"unknown,omitempty"`
+
+	// UrgentUpdates is the number of workloads needing urgent updates.
+	UrgentUpdates int `json:"urgentUpdates,omitempty"`
 }
 
 // +kubebuilder:object:root=true

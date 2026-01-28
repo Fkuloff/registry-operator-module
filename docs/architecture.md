@@ -24,13 +24,20 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
 │  │- Orch.   │  │- Manifest│  │- CVEs    │  │- Packages│            │
 │  │- Status  │  │- Auth    │  │- Summary │  │- Licenses│            │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
-│                      │             │             │                   │
-│                      │         ┌───┴─────────────┴───┐              │
-│                      │         │   SBOM Analyzer     │              │
-│                      │         │ - Dependencies      │              │
-│                      │         │ - Enrichment        │              │
-│                      │         │ - Top packages      │              │
-│                      │         └─────────────────────┘              │
+│       │                │             │             │                 │
+│       │                │         ┌───┴─────────────┴───┐            │
+│       │                │         │   SBOM Analyzer     │            │
+│       │                │         │ - Dependencies      │            │
+│       │                │         │ - Enrichment        │            │
+│       │                │         │ - Top packages      │            │
+│       │                │         └─────────────────────┘            │
+│       │                │                                             │
+│       │      ┌─────────┴─────────────────┐                          │
+│       └─────▶│   Drift Detection         │                          │
+│              │ - Workload Scanner        │                          │
+│              │ - Drift Analyzer          │                          │
+│              │ - Semver Comparison       │                          │
+│              └───────────────────────────┘                          │
 └──────────────────────┼─────────────────┬────────────────────────────┘
                        │                 │
                        ▼                 ▼
@@ -118,6 +125,19 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
                             │                   │
                             ▼◀──────────────────┘
                 ┌───────────────────────┐
+                │ Drift detection?      │──No───┐
+                │ (if enabled & due)    │       │
+                └───────────────────────┘       │
+                            │ Yes               │
+                            ▼                   │
+                ┌───────────────────────┐       │
+                │ Scan workloads        │       │
+                │ + analyze drift       │       │
+                │ + semver comparison   │       │
+                └───────────────────────┘       │
+                            │                   │
+                            ▼◀──────────────────┘
+                ┌───────────────────────┐
                 │ Update status         │
                 │ (Success/Failed)      │
                 └───────────────────────┘
@@ -193,6 +213,21 @@ Features:
 - Enriches packages with vulnerability data
 - Links CVEs to specific packages
 
+### Drift Detection
+
+Workload drift monitoring in `internal/drift/`.
+
+Components:
+- **Scanner** (`scanner.go`): Discovers Deployments, StatefulSets, DaemonSets
+- **Analyzer** (`analyzer.go`): Compares workload images with registry images
+
+Features:
+- Semantic version comparison using [semver](https://github.com/Masterminds/semver)
+- Identifies workloads with outdated or vulnerable images
+- Generates actionable recommendations (NO_ACTION, UPDATE_AVAILABLE, URGENT_UPDATE)
+- Tracks CVE fixes in available updates
+- Multi-namespace support
+
 ## CRD Schema
 
 ### Registry Spec
@@ -207,6 +242,8 @@ Features:
 | `scanConfig` | object | Timeout, retries, concurrency settings |
 | `tagFilter` | object | Include/exclude patterns, limit, sort |
 | `vulnerabilityScanning` | object | Trivy scan configuration |
+| `sbomGeneration` | object | Syft SBOM generation configuration |
+| `driftDetection` | object | Workload drift monitoring configuration |
 
 ### Registry Status
 
@@ -216,6 +253,7 @@ Features:
 | `lastScanStatus` | string | "Success" or "Failed" |
 | `message` | string | Error message if failed |
 | `images` | []ImageInfo | List of discovered images |
+| `drift` | DriftStatus | Drift detection results |
 
 ### ImageInfo
 

@@ -275,6 +275,13 @@ spec:
     format: spdx-json
     includeLicenses: true
     scanInterval: 7200
+
+  driftDetection:
+    enabled: true
+    namespaces:
+      - production
+      - staging
+    checkInterval: 600
 EOF
 ```
 
@@ -296,6 +303,17 @@ kubectl get registry nginx-sbom -o json | \
 
 # View vulnerability summary
 kubectl get registry secure-nginx -o jsonpath='{.status.images[0].vulnerabilities}' | jq .
+
+# View drift detection summary
+kubectl get registry production-app -o jsonpath='{.status.drift.summary}' | jq .
+
+# Find vulnerable workloads
+kubectl get registry production-app -o json | \
+  jq '.status.drift.workloads[] | select(.status=="VULNERABLE")'
+
+# Check outdated workloads
+kubectl get registry production-app -o json | \
+  jq '.status.drift.workloads[] | select(.status=="OUTDATED")'
 ```
 
 ## Module Configuration

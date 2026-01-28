@@ -38,6 +38,7 @@ Registry Operator is a Kubernetes-native solution for comprehensive container re
 | **SBOM Generation** | Generates Software Bill of Materials using Syft for dependency tracking |
 | **License Scanning** | Identifies licenses and flags risky copyleft licenses (GPL, AGPL) |
 | **Dependency Analysis** | Distinguishes direct vs transitive dependencies |
+| **Drift Detection** | Compares running workloads (Deployments/StatefulSets/DaemonSets) with registry images using semantic versioning |
 | **Tag Filtering** | Include/exclude by regex, limit count, sort order |
 | **Private Registries** | Supports authentication via Kubernetes Secrets |
 | **Worker Pool Pattern** | Efficient concurrent processing with configurable parallelism |
@@ -47,9 +48,9 @@ Registry Operator is a Kubernetes-native solution for comprehensive container re
 
 ```bash
 # Apply CRD
-kubectl apply -f crds/registry.yaml
+kubectl apply -f crds/registry.kubecontroller.io_registries.yaml
 
-# Run operator
+# Run operator locally
 cd images/registry-operator/src
 go run ./cmd/main.go
 ```
@@ -188,6 +189,43 @@ spec:
     format: spdx-json
     includeLicenses: true
     scanInterval: 7200
+
+  driftDetection:
+    enabled: true
+    namespaces:
+      - production
+      - staging
+    checkInterval: 600
+```
+
+**Note:** For a fully annotated production-ready example, see [examples/production.yaml](examples/production.yaml)
+
+### Drift Detection
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-drift
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 300
+
+  tagFilter:
+    limit: 10
+
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: HIGH
+
+  # Monitor running workloads (Deployments, StatefulSets, DaemonSets)
+  driftDetection:
+    enabled: true
+    namespaces:
+      - production
+      - staging
+    checkInterval: 600      # Check every 10 minutes
 ```
 
 ### Check Status
@@ -210,6 +248,18 @@ kubectl get registry nginx -o jsonpath='{.status.images[*].sbom.licenses.riskyLi
 
 # Find packages with critical CVEs
 kubectl get registry nginx -o json | jq '.status.images[].sbom.packages[] | select(.critical==true)'
+
+# View drift detection summary
+kubectl get registry nginx -o jsonpath='{.status.drift.summary}' | jq .
+
+# List outdated workloads
+kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.status=="OUTDATED")'
+
+# Find workloads with critical vulnerabilities
+kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.status=="VULNERABLE")'
+
+# Check which workloads need urgent updates
+kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.recommendation=="URGENT_UPDATE")'
 ```
 
 ## Configuration
@@ -233,13 +283,15 @@ kubectl get registry nginx -o json | jq '.status.images[].sbom.packages[] | sele
 | `sbomGeneration.format` | string | | syft-json | spdx-json/cyclonedx-json/syft-json |
 | `sbomGeneration.includeLicenses` | bool | | false | Include license information |
 | `sbomGeneration.scanInterval` | int64 | | 3600 | SBOM generation interval (seconds) |
+| `driftDetection.enabled` | bool | | false | Enable drift detection (tracks Deployments/StatefulSets/DaemonSets) |
+| `driftDetection.namespaces` | []string | | [] | Namespaces to monitor (empty=all) |
+| `driftDetection.checkInterval` | int64 | | scanInterval | Drift check interval (seconds) |
 | `scanConfig.timeout` | string | | 30s | HTTP request timeout |
 | `scanConfig.retryAttempts` | int | | 3 | Retry attempts on failure |
 | `scanConfig.concurrency` | int | | 1 | Parallel image processing |
 
 ## Documentation
 
-- [SBOM Feature Guide](docs/SBOM_FEATURE.md) - Complete SBOM functionality documentation
 - [Architecture](docs/architecture.md) - System architecture and components
 - [Development Guide](docs/development.md) - Development setup and workflows
 - [Deckhouse Integration](docs/deckhouse.md) - Deploy as Deckhouse module
@@ -274,15 +326,16 @@ syft version
 # 1. Install CRDs
 kubectl apply -f crds/registry.kubecontroller.io_registries.yaml
 
-# 2. Deploy operator
-kubectl apply -f examples/deployment.yaml
+# 2. Run operator (in separate terminal)
+cd images/registry-operator/src
+go run ./cmd/main.go
 
 # 3. Create a registry resource
-kubectl apply -f examples/registry-with-sbom.yaml
+kubectl apply -f examples/basic.yaml
 
 # 4. Check results
 kubectl get registries
-kubectl get registry nginx-with-sbom -o yaml
+kubectl get registry nginx -o yaml
 ```
 
 ## License
