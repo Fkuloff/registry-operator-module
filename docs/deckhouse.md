@@ -232,7 +232,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: syft-json
-    includeLicenses: true
     scanInterval: 3600
 EOF
 ```
@@ -273,7 +272,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: spdx-json
-    includeLicenses: true
     scanInterval: 7200
 
   driftDetection:

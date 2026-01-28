@@ -62,6 +62,8 @@ func NewClient(registryURL, username, password string, insecureSkipVerify bool, 
 		})
 	}
 
+	// #nosec G402 -- InsecureSkipVerify is explicitly configurable by the user via the Registry CR
+	// for testing with self-signed certificates or insecure registries. This is intentional and documented.
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify},
 		DialContext: (&net.Dialer{

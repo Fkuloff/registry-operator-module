@@ -57,10 +57,6 @@ type SBOMConfig struct {
 	// +optional
 	Format string `json:"format,omitempty"`
 
-	// IncludeLicenses includes license information in SBOM.
-	// +optional
-	IncludeLicenses bool `json:"includeLicenses,omitempty"`
-
 	// ScanInterval is the interval between SBOM scans in seconds.
 	// Typically matches vulnerability scan interval.
 	// +optional
@@ -281,10 +277,6 @@ type SBOMInfo struct {
 	// +optional
 	PackageTypes map[string]int `json:"packageTypes,omitempty"`
 
-	// Licenses contains summary of licenses found.
-	// +optional
-	Licenses *LicenseSummary `json:"licenses,omitempty"`
-
 	// Dependencies contains critical dependency information.
 	// +optional
 	Dependencies *DependencySummary `json:"dependencies,omitempty"`
@@ -303,10 +295,6 @@ type PackageInfo struct {
 	// +optional
 	Type string `json:"type,omitempty"`
 
-	// License is the package license.
-	// +optional
-	License string `json:"license,omitempty"`
-
 	// VulnerabilityCount is the number of known vulnerabilities in this package.
 	// +optional
 	VulnerabilityCount int `json:"vulnerabilityCount,omitempty"`
@@ -314,25 +302,6 @@ type PackageInfo struct {
 	// Critical indicates if this package has critical vulnerabilities.
 	// +optional
 	Critical bool `json:"critical,omitempty"`
-}
-
-// LicenseSummary contains summary of licenses found in the image.
-type LicenseSummary struct {
-	// Total is the total number of packages with identified licenses.
-	// +optional
-	Total int `json:"total,omitempty"`
-
-	// Unknown is the number of packages with unknown licenses.
-	// +optional
-	Unknown int `json:"unknown,omitempty"`
-
-	// ByLicense is a map of license name to count.
-	// +optional
-	ByLicense map[string]int `json:"byLicense,omitempty"`
-
-	// RiskyLicenses contains licenses that may pose compliance risks.
-	// +optional
-	RiskyLicenses []string `json:"riskyLicenses,omitempty"`
 }
 
 // DependencySummary contains dependency analysis information.

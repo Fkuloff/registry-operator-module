@@ -253,7 +253,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: syft-json
-    includeLicenses: true
     scanInterval: 300
 ```
 
@@ -268,9 +267,6 @@ kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom}' | jq .
 
 # Check packages
 kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom.packages[*].name}'
-
-# Check licenses
-kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom.licenses}' | jq .
 ```
 
 ### Test SBOM + Vulnerability Enrichment
@@ -294,7 +290,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: syft-json
-    includeLicenses: true
     scanInterval: 300
 ```
 
@@ -381,27 +376,3 @@ kubectl apply -f examples/private-registry.yaml
 | `make fmt` | Format code |
 | `make vet` | Static analysis |
 | `make mod-tidy` | Tidy go modules |
-
-## IDE Setup
-
-### VS Code
-
-Recommended extensions:
-- Go (official)
-- YAML
-- Kubernetes
-
-`.vscode/settings.json`:
-```json
-{
-  "go.useLanguageServer": true,
-  "go.lintTool": "golangci-lint",
-  "go.formatTool": "goimports"
-}
-```
-
-### GoLand
-
-- Enable Go Modules integration
-- Set GOROOT and GOPATH
-- Enable "Format on Save"

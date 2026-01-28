@@ -36,7 +36,6 @@ Registry Operator is a Kubernetes-native solution for comprehensive container re
 | **Metadata Collection** | Extracts digests (SHA256) and sizes for each image |
 | **Vulnerability Detection** | Integrates with Trivy for CVE scanning with severity filtering |
 | **SBOM Generation** | Generates Software Bill of Materials using Syft for dependency tracking |
-| **License Scanning** | Identifies licenses and flags risky copyleft licenses (GPL, AGPL) |
 | **Dependency Analysis** | Distinguishes direct vs transitive dependencies |
 | **Drift Detection** | Compares running workloads (Deployments/StatefulSets/DaemonSets) with registry images using semantic versioning |
 | **Tag Filtering** | Include/exclude by regex, limit count, sort order |
@@ -143,7 +142,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: syft-json              # Options: spdx-json, cyclonedx-json, syft-json
-    includeLicenses: true          # Include license information
     scanInterval: 3600             # Regenerate every hour
 
   # Combine with vulnerability scanning
@@ -187,7 +185,6 @@ spec:
   sbomGeneration:
     enabled: true
     format: spdx-json
-    includeLicenses: true
     scanInterval: 7200
 
   driftDetection:
@@ -243,9 +240,6 @@ kubectl get registry nginx -o jsonpath='{.status.images[0].vulnerabilities}'
 # View SBOM summary
 kubectl get registry nginx -o jsonpath='{.status.images[0].sbom}' | jq .
 
-# Check for risky licenses
-kubectl get registry nginx -o jsonpath='{.status.images[*].sbom.licenses.riskyLicenses}'
-
 # Find packages with critical CVEs
 kubectl get registry nginx -o json | jq '.status.images[].sbom.packages[] | select(.critical==true)'
 
@@ -281,7 +275,6 @@ kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.rec
 | `vulnerabilityScanning.scanInterval` | int64 | | 3600 | Vulnerability scan interval (seconds) |
 | `sbomGeneration.enabled` | bool | | false | Enable SBOM generation |
 | `sbomGeneration.format` | string | | syft-json | spdx-json/cyclonedx-json/syft-json |
-| `sbomGeneration.includeLicenses` | bool | | false | Include license information |
 | `sbomGeneration.scanInterval` | int64 | | 3600 | SBOM generation interval (seconds) |
 | `driftDetection.enabled` | bool | | false | Enable drift detection (tracks Deployments/StatefulSets/DaemonSets) |
 | `driftDetection.namespaces` | []string | | [] | Namespaces to monitor (empty=all) |
