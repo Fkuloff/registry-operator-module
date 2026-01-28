@@ -60,7 +60,7 @@ kind create cluster
 ### 2. Install CRD
 
 ```bash
-kubectl apply -f crds/registry.yaml
+kubectl apply -f crds/registry.kubecontroller.io_registries.yaml
 ```
 
 ### 3. Run Operator
@@ -119,9 +119,7 @@ go test ./... -v
 
 ```bash
 go test ./internal/controller/... -v
-go test ./internal/registry/... -v
-go test ./internal/vulnerability/... -v
-go test ./internal/sbom/... -v
+# Add tests for other packages as needed
 ```
 
 ### With Race Detection
@@ -193,7 +191,7 @@ curl localhost:8080/metrics
 2. Add field to appropriate struct with JSON tags
 3. Run `make generate` (DeepCopy)
 4. Run `make manifests` (CRD YAML)
-5. Apply new CRD: `kubectl apply -f crds/registry.yaml`
+5. Apply new CRD: `kubectl apply -f crds/registry.kubecontroller.io_registries.yaml`
 
 ### Add a New Controller Method
 
@@ -310,6 +308,53 @@ kubectl get registry test-sbom-vuln -o json | \
 # Find critical packages
 kubectl get registry test-sbom-vuln -o json | \
   jq '.status.images[0].sbom.packages[] | select(.critical == true)'
+```
+
+### Test Drift Detection
+
+```bash
+# Create test deployments
+kubectl create deployment nginx-old --image=nginx:1.24.0
+kubectl create deployment nginx-new --image=nginx:1.26.0
+
+# Create registry with drift detection
+cat <<EOF | kubectl apply -f -
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: test-drift
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  tagFilter:
+    include: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    limit: 10
+    sortBy: newest
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: MEDIUM
+  driftDetection:
+    enabled: true
+    checkInterval: 300
+EOF
+
+# Wait for scan
+kubectl wait --for=condition=Ready registry/test-drift --timeout=300s
+
+# View drift summary
+kubectl get registry test-drift -o jsonpath='{.status.drift.summary}' | jq .
+
+# Find vulnerable workloads
+kubectl get registry test-drift -o json | \
+  jq '.status.drift.workloads[] | select(.status=="VULNERABLE")'
+
+# Check outdated workloads
+kubectl get registry test-drift -o json | \
+  jq '.status.drift.workloads[] | select(.status=="OUTDATED")'
+
+# View available updates
+kubectl get registry test-drift -o json | \
+  jq '.status.drift.workloads[0].availableUpdates'
 ```
 
 ### Test Private Registry

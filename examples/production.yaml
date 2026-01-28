@@ -1,0 +1,127 @@
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: production-nginx
+  namespace: default
+spec:
+  # ============================================================================
+  # REGISTRY CONFIGURATION
+  # ============================================================================
+
+  # Registry URL (required)
+  url: https://registry-1.docker.io
+
+  # Repository path (required)
+  repository: library/nginx
+
+  # Scan interval in seconds (default: 300)
+  scanInterval: 600
+
+  # Skip TLS verification for self-signed certificates (default: false)
+  insecureSkipVerify: false
+
+  # ============================================================================
+  # AUTHENTICATION (Optional)
+  # ============================================================================
+
+  # Credentials for private registry
+  # credentialsSecret:
+  #   name: registry-credentials
+
+  # ============================================================================
+  # TAG FILTERING
+  # ============================================================================
+
+  tagFilter:
+    # Include only tags matching this regex
+    # Example: only semantic versions like 1.25.0, 1.26.1
+    include: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+    # Exclude tags matching this regex (optional)
+    # exclude: "^.*-rc.*$"
+
+    # Limit number of tags to process (0 = unlimited)
+    limit: 10
+
+    # Sort order: newest, oldest, alphabetical (default: alphabetical)
+    sortBy: newest
+
+  # ============================================================================
+  # SCAN CONFIGURATION
+  # ============================================================================
+
+  scanConfig:
+    # HTTP request timeout for registry operations
+    timeout: 60s
+
+    # Number of retry attempts on failure
+    retryAttempts: 3
+
+    # Number of images to process in parallel
+    concurrency: 5
+
+  # ============================================================================
+  # VULNERABILITY SCANNING (Trivy)
+  # ============================================================================
+
+  vulnerabilityScanning:
+    # Enable vulnerability scanning
+    enabled: true
+
+    # Scanner: trivy (default and only option)
+    scanner: trivy
+
+    # Minimum severity to report: CRITICAL, HIGH, MEDIUM, LOW
+    severityThreshold: MEDIUM
+
+    # Ignore unfixed vulnerabilities (no patch available)
+    ignoreUnfixed: false
+
+    # Vulnerability scan interval in seconds (default: 3600)
+    scanInterval: 7200
+
+  # ============================================================================
+  # SBOM GENERATION (Syft)
+  # ============================================================================
+
+  sbomGeneration:
+    # Enable SBOM generation
+    enabled: true
+
+    # SBOM format: syft-json, spdx-json, cyclonedx-json
+    format: spdx-json
+
+    # Include license information in SBOM
+    includeLicenses: true
+
+    # SBOM generation interval in seconds (default: 3600)
+    scanInterval: 7200
+
+  # ============================================================================
+  # DRIFT DETECTION
+  # ============================================================================
+
+  driftDetection:
+    # Enable drift detection (tracks Deployments, StatefulSets, DaemonSets)
+    enabled: true
+
+    # Namespaces to monitor (empty = all namespaces)
+    namespaces:
+      - production
+      - staging
+
+    # Drift check interval in seconds (default: scanInterval)
+    checkInterval: 600
+---
+# ============================================================================
+# SECRET FOR PRIVATE REGISTRY (Optional)
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-credentials
+  namespace: default
+type: Opaque
+stringData:
+  username: myuser
+  password: mypassword

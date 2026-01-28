@@ -72,6 +72,27 @@ spec:
                 required:
                 - name
                 type: object
+              driftDetection:
+                description: DriftDetection defines drift detection settings.
+                properties:
+                  checkInterval:
+                    description: |-
+                      CheckInterval is the interval between drift checks in seconds.
+                      Defaults to scanInterval if not specified.
+                    format: int64
+                    type: integer
+                  enabled:
+                    description: |-
+                      Enabled enables drift detection.
+                      When enabled, tracks Deployments, StatefulSets, and DaemonSets.
+                    type: boolean
+                  namespaces:
+                    description: Namespaces is the list of namespaces to monitor.
+                      Empty means all namespaces.
+                    items:
+                      type: string
+                    type: array
+                type: object
               insecureSkipVerify:
                 description: InsecureSkipVerify skips TLS certificate verification.
                 type: boolean
@@ -189,6 +210,122 @@ spec:
           status:
             description: RegistryStatus defines the observed state of Registry.
             properties:
+              drift:
+                description: Drift contains drift detection results.
+                properties:
+                  lastCheckTime:
+                    description: LastCheckTime is the timestamp of the last drift
+                      check.
+                    format: date-time
+                    type: string
+                  summary:
+                    description: Summary contains aggregated drift statistics.
+                    properties:
+                      latest:
+                        description: Latest is the number of workloads using latest
+                          available image.
+                        type: integer
+                      outdated:
+                        description: Outdated is the number of workloads with newer
+                          images available.
+                        type: integer
+                      total:
+                        description: Total is the total number of workloads tracked.
+                        type: integer
+                      unknown:
+                        description: Unknown is the number of workloads with unknown
+                          image status.
+                        type: integer
+                      urgentUpdates:
+                        description: UrgentUpdates is the number of workloads needing
+                          urgent updates.
+                        type: integer
+                      vulnerable:
+                        description: Vulnerable is the number of workloads with critical
+                          vulnerabilities.
+                        type: integer
+                    type: object
+                  workloads:
+                    description: Workloads contains drift information for each workload.
+                    items:
+                      description: WorkloadDrift contains drift information for a
+                        single workload.
+                      properties:
+                        availableUpdates:
+                          description: AvailableUpdates contains newer tags available
+                            in registry.
+                          items:
+                            description: AvailableUpdate contains information about
+                              an available image update.
+                            properties:
+                              criticalCVEsFixed:
+                                description: CriticalCVEsFixed is the number of critical
+                                  CVEs fixed in this version.
+                                type: integer
+                              highCVEsFixed:
+                                description: HighCVEsFixed is the number of high CVEs
+                                  fixed in this version.
+                                type: integer
+                              newCVEs:
+                                description: NewCVEs is the number of new CVEs introduced
+                                  in this version.
+                                type: integer
+                              newer:
+                                description: Newer indicates if this tag is newer
+                                  than current.
+                                type: boolean
+                              recommendation:
+                                description: Recommendation provides update guidance
+                                  for this specific version.
+                                type: string
+                              sizeDiff:
+                                description: SizeDiff is the size difference in bytes
+                                  (negative means smaller).
+                                format: int64
+                                type: integer
+                              tag:
+                                description: Tag is the available tag.
+                                type: string
+                            required:
+                            - tag
+                            type: object
+                          type: array
+                        currentImage:
+                          description: CurrentImage is the image currently used by
+                            the workload.
+                          type: string
+                        currentTag:
+                          description: CurrentTag is the parsed tag from current image.
+                          type: string
+                        kind:
+                          description: Kind is the workload kind (Deployment, StatefulSet,
+                            DaemonSet, etc.).
+                          type: string
+                        message:
+                          description: Message provides additional context or warnings.
+                          type: string
+                        name:
+                          description: Name is the workload name.
+                          type: string
+                        namespace:
+                          description: Namespace is the workload namespace.
+                          type: string
+                        recommendation:
+                          description: Recommendation provides update guidance.
+                          type: string
+                        status:
+                          description: 'Status indicates drift status: "LATEST", "OUTDATED",
+                            "VULNERABLE", "UNKNOWN".'
+                          type: string
+                      required:
+                      - currentImage
+                      - kind
+                      - name
+                      - namespace
+                      - status
+                      type: object
+                    type: array
+                type: object
               images:
                 description: Images contains information about discovered images.
                 items:

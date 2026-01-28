@@ -3,6 +3,7 @@ module registry-operator
 go 1.24.0
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.20.7
 	k8s.io/api v0.29.0
