@@ -6,30 +6,6 @@ This guide explains how to build, publish, and deploy Registry Operator as a [De
 
 Deckhouse modules are packaged as OCI artifacts and deployed via `ModuleSource`, `ModuleUpdatePolicy`, and `ModuleConfig` resources.
 
-### Module Structure
-
-```
-registry-operator/
-├── .werf/
-│   └── stages/
-│       └── registry-operator.yaml    # Build stages
-├── images/
-│   └── registry-operator/
-│       ├── Dockerfile                 # Image build
-│       └── src/                       # Go source code
-├── templates/                         # Helm templates
-│   ├── deployment.yaml
-│   ├── rbac.yaml
-│   └── registry.yaml                  # CRD
-├── crds/
-│   └── registry.yaml                  # CRD manifest
-├── Chart.yaml                         # Helm chart metadata
-├── module.yaml                        # Module configuration schema
-├── werf.yaml                          # werf configuration
-└── charts/
-    └── deckhouse_lib_helm-*.tgz       # Deckhouse Helm library
-```
-
 ## Prerequisites
 
 - [werf](https://werf.io) 2.x
@@ -194,6 +170,132 @@ registry-operator-5d4f8c9b7-x2k9m   1/1     Running   0          5m
 
 ```bash
 kubectl logs -n d8-registry-operator -l app=registry-operator -f
+```
+
+## Using Registry Resources
+
+After deploying the module, create Registry resources to scan container registries:
+
+### Basic Registry Scanning
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-registry
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 300
+  tagFilter:
+    limit: 5
+EOF
+```
+
+### Registry with Vulnerability Scanning
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: secure-nginx
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 600
+  tagFilter:
+    limit: 10
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: HIGH
+    ignoreUnfixed: false
+    scanInterval: 3600
+EOF
+```
+
+### Registry with SBOM Generation
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-sbom
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 600
+  tagFilter:
+    limit: 5
+  sbomGeneration:
+    enabled: true
+    format: syft-json
+    includeLicenses: true
+    scanInterval: 3600
+EOF
+```
+
+### Full-Featured Registry
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: production-app
+spec:
+  url: https://registry.example.com
+  repository: company/app
+  scanInterval: 600
+
+  credentialsSecret:
+    name: registry-credentials
+
+  tagFilter:
+    include: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    limit: 10
+    sortBy: newest
+
+  scanConfig:
+    timeout: 60s
+    retryAttempts: 3
+    concurrency: 5
+
+  vulnerabilityScanning:
+    enabled: true
+    scanner: trivy
+    severityThreshold: MEDIUM
+    ignoreUnfixed: false
+    scanInterval: 7200
+
+  sbomGeneration:
+    enabled: true
+    format: spdx-json
+    includeLicenses: true
+    scanInterval: 7200
+EOF
+```
+
+### Check Registry Status
+
+```bash
+# List all registries
+kubectl get registries
+
+# View full status
+kubectl get registry nginx-sbom -o yaml
+
+# View SBOM summary
+kubectl get registry nginx-sbom -o jsonpath='{.status.images[0].sbom}' | jq .
+
+# Check for critical packages
+kubectl get registry nginx-sbom -o json | \
+  jq '.status.images[].sbom.packages[] | select(.critical==true)'
+
+# View vulnerability summary
+kubectl get registry secure-nginx -o jsonpath='{.status.images[0].vulnerabilities}' | jq .
 ```
 
 ## Module Configuration

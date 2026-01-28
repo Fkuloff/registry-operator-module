@@ -120,7 +120,7 @@ func (c *Client) GetImageDetails(ctx context.Context, repository, tag string) (*
 		return nil, fmt.Errorf("get manifest: %w", err)
 	}
 
-	var totalSize int64 = manifest.Config.Size
+	totalSize := manifest.Config.Size
 	for _, layer := range manifest.Layers {
 		totalSize += layer.Size
 	}
@@ -132,11 +132,12 @@ func (c *Client) GetImageDetails(ctx context.Context, repository, tag string) (*
 	}, nil
 }
 
-// buildOptions creates a copy of remote options with the provided context.
+// buildOptions creates options with context appended.
 func (c *Client) buildOptions(ctx context.Context) []remote.Option {
-	opts := make([]remote.Option, len(c.remoteOptions), len(c.remoteOptions)+1)
-	copy(opts, c.remoteOptions)
-	return append(opts, remote.WithContext(ctx))
+	opts := make([]remote.Option, 0, len(c.remoteOptions)+1)
+	opts = append(opts, c.remoteOptions...)
+	opts = append(opts, remote.WithContext(ctx))
+	return opts
 }
 
 // parseRepository constructs a full repository reference.
@@ -153,5 +154,7 @@ func (c *Client) parseTag(repository, tag string) (name.Tag, error) {
 
 // stripScheme removes the http:// or https:// prefix from a URL.
 func stripScheme(url string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(url, "https://"), "http://")
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "http://")
+	return url
 }

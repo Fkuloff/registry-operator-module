@@ -36,6 +36,35 @@ type RegistrySpec struct {
 	// VulnerabilityScanning defines vulnerability scanning settings.
 	// +optional
 	VulnerabilityScanning *VulnerabilityScanConfig `json:"vulnerabilityScanning,omitempty"`
+
+	// SBOMGeneration defines SBOM generation settings.
+	// +optional
+	SBOMGeneration *SBOMConfig `json:"sbomGeneration,omitempty"`
+}
+
+// SBOMConfig defines SBOM generation settings.
+type SBOMConfig struct {
+	// Enabled enables SBOM generation.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Format specifies the SBOM format: "spdx-json", "cyclonedx-json", "syft-json".
+	// Defaults to "syft-json".
+	// +optional
+	Format string `json:"format,omitempty"`
+
+	// IncludeLicenses includes license information in SBOM.
+	// +optional
+	IncludeLicenses bool `json:"includeLicenses,omitempty"`
+
+	// ScanInterval is the interval between SBOM scans in seconds.
+	// Typically matches vulnerability scan interval.
+	// +optional
+	ScanInterval int64 `json:"scanInterval,omitempty"`
+
+	// Tags specifies which tags to generate SBOM for. If empty, all tags are processed.
+	// +optional
+	Tags []string `json:"tags,omitempty"`
 }
 
 // VulnerabilityScanConfig defines vulnerability scanning settings.
@@ -156,6 +185,10 @@ type ImageInfo struct {
 	// Vulnerabilities contains vulnerability scan results.
 	// +optional
 	Vulnerabilities *VulnerabilitySummary `json:"vulnerabilities,omitempty"`
+
+	// SBOM contains Software Bill of Materials information.
+	// +optional
+	SBOM *SBOMInfo `json:"sbom,omitempty"`
 }
 
 // VulnerabilitySummary contains vulnerability scan results for an image.
@@ -215,6 +248,102 @@ type CVEInfo struct {
 	// Title is a short description of the vulnerability.
 	// +optional
 	Title string `json:"title,omitempty"`
+}
+
+// SBOMInfo contains Software Bill of Materials information for an image.
+type SBOMInfo struct {
+	// Format is the SBOM format (e.g., "spdx-json", "cyclonedx-json", "syft-json").
+	// +optional
+	Format string `json:"format,omitempty"`
+
+	// GeneratedAt is the timestamp when SBOM was generated.
+	// +optional
+	GeneratedAt *metav1.Time `json:"generatedAt,omitempty"`
+
+	// TotalPackages is the total number of packages found.
+	// +optional
+	TotalPackages int `json:"totalPackages,omitempty"`
+
+	// Packages contains the list of packages in the image.
+	// Limited to top-level packages for status size optimization.
+	// +optional
+	Packages []PackageInfo `json:"packages,omitempty"`
+
+	// PackageTypes contains summary by package type.
+	// +optional
+	PackageTypes map[string]int `json:"packageTypes,omitempty"`
+
+	// Licenses contains summary of licenses found.
+	// +optional
+	Licenses *LicenseSummary `json:"licenses,omitempty"`
+
+	// Dependencies contains critical dependency information.
+	// +optional
+	Dependencies *DependencySummary `json:"dependencies,omitempty"`
+}
+
+// PackageInfo contains information about a software package in the image.
+type PackageInfo struct {
+	// Name is the package name.
+	Name string `json:"name"`
+
+	// Version is the package version.
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// Type is the package type (e.g., "deb", "rpm", "python", "npm", "go", "java").
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// License is the package license.
+	// +optional
+	License string `json:"license,omitempty"`
+
+	// VulnerabilityCount is the number of known vulnerabilities in this package.
+	// +optional
+	VulnerabilityCount int `json:"vulnerabilityCount,omitempty"`
+
+	// Critical indicates if this package has critical vulnerabilities.
+	// +optional
+	Critical bool `json:"critical,omitempty"`
+}
+
+// LicenseSummary contains summary of licenses found in the image.
+type LicenseSummary struct {
+	// Total is the total number of packages with identified licenses.
+	// +optional
+	Total int `json:"total,omitempty"`
+
+	// Unknown is the number of packages with unknown licenses.
+	// +optional
+	Unknown int `json:"unknown,omitempty"`
+
+	// ByLicense is a map of license name to count.
+	// +optional
+	ByLicense map[string]int `json:"byLicense,omitempty"`
+
+	// RiskyLicenses contains licenses that may pose compliance risks.
+	// +optional
+	RiskyLicenses []string `json:"riskyLicenses,omitempty"`
+}
+
+// DependencySummary contains dependency analysis information.
+type DependencySummary struct {
+	// Direct is the number of direct dependencies.
+	// +optional
+	Direct int `json:"direct,omitempty"`
+
+	// Transitive is the number of transitive dependencies.
+	// +optional
+	Transitive int `json:"transitive,omitempty"`
+
+	// Outdated is the number of packages with newer versions available.
+	// +optional
+	Outdated int `json:"outdated,omitempty"`
+
+	// TopLevelPackages contains the most important packages (base OS, frameworks).
+	// +optional
+	TopLevelPackages []string `json:"topLevelPackages,omitempty"`
 }
 
 // +kubebuilder:object:root=true

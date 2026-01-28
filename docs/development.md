@@ -6,6 +6,7 @@
 - kubectl
 - A Kubernetes cluster (minikube, kind, or remote)
 - (Optional) [Trivy](https://trivy.dev) for vulnerability scanning
+- (Optional) [Syft](https://github.com/anchore/syft) for SBOM generation
 - (Optional) [controller-gen](https://book.kubebuilder.io/reference/controller-gen) for code generation
 
 ## Project Setup
@@ -120,6 +121,7 @@ go test ./... -v
 go test ./internal/controller/... -v
 go test ./internal/registry/... -v
 go test ./internal/vulnerability/... -v
+go test ./internal/sbom/... -v
 ```
 
 ### With Race Detection
@@ -224,6 +226,92 @@ kubectl apply -f examples/dockerhub.yaml
 kubectl get registry test-dockerhub -o yaml
 ```
 
+### Test SBOM Generation
+
+Requires [Syft](https://github.com/anchore/syft) installed:
+
+```bash
+# Install Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+# Verify installation
+syft version
+```
+
+Create test resource with SBOM enabled:
+
+```yaml
+# examples/test-sbom.yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: test-sbom
+spec:
+  url: https://registry-1.docker.io
+  repository: library/alpine
+  scanInterval: 120
+  tagFilter:
+    limit: 2
+  sbomGeneration:
+    enabled: true
+    format: syft-json
+    includeLicenses: true
+    scanInterval: 300
+```
+
+```bash
+kubectl apply -f examples/test-sbom.yaml
+
+# Wait for scan to complete
+kubectl wait --for=condition=Ready registry/test-sbom --timeout=300s
+
+# View SBOM data
+kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom}' | jq .
+
+# Check packages
+kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom.packages[*].name}'
+
+# Check licenses
+kubectl get registry test-sbom -o jsonpath='{.status.images[0].sbom.licenses}' | jq .
+```
+
+### Test SBOM + Vulnerability Enrichment
+
+```yaml
+# examples/test-sbom-vuln.yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: test-sbom-vuln
+spec:
+  url: https://registry-1.docker.io
+  repository: library/nginx
+  scanInterval: 180
+  tagFilter:
+    limit: 1
+  vulnerabilityScanning:
+    enabled: true
+    severityThreshold: HIGH
+    scanInterval: 300
+  sbomGeneration:
+    enabled: true
+    format: syft-json
+    includeLicenses: true
+    scanInterval: 300
+```
+
+```bash
+kubectl apply -f examples/test-sbom-vuln.yaml
+
+# View enriched packages with CVE counts
+kubectl get registry test-sbom-vuln -o json | \
+  jq '.status.images[0].sbom.packages[] | select(.vulnerabilityCount > 0)'
+
+# Find critical packages
+kubectl get registry test-sbom-vuln -o json | \
+  jq '.status.images[0].sbom.packages[] | select(.critical == true)'
+```
+
 ### Test Private Registry
 
 ```bash
@@ -234,27 +322,6 @@ kubectl create secret generic my-creds \
 
 # Apply registry with credentials
 kubectl apply -f examples/private-registry.yaml
-```
-
-## Project Structure
-
-```
-images/registry-operator/src/
-├── cmd/
-│   └── main.go                 # Entrypoint
-├── apis/
-│   └── registry.kubecontroller.io/
-│       └── v1alpha1/
-│           ├── groupversion_info.go
-│           ├── registry_types.go     # <- Edit CRD here
-│           └── zz_generated.deepcopy.go
-└── internal/
-    ├── controller/
-    │   └── registry_controller.go    # <- Main logic
-    ├── registry/
-    │   └── client.go                 # Registry API client
-    └── vulnerability/
-        └── scanner.go                # Trivy wrapper
 ```
 
 ## Makefile Targets

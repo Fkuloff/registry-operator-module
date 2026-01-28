@@ -1,0 +1,389 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: registries.registry.kubecontroller.io
+spec:
+  group: registry.kubecontroller.io
+  names:
+    kind: Registry
+    listKind: RegistryList
+    plural: registries
+    singular: registry
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.url
+      name: URL
+      type: string
+    - jsonPath: .spec.repository
+      name: Repository
+      type: string
+    - jsonPath: .status.lastScanStatus
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Registry is the Schema for the registries API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RegistrySpec defines the desired state of Registry.
+            properties:
+              credentialsSecret:
+                description: CredentialsSecret is a reference to a Secret containing
+                  registry credentials.
+                properties:
+                  name:
+                    description: Name is the name of the Secret.
+                    type: string
+                  passwordKey:
+                    description: |-
+                      PasswordKey is the key in the Secret containing the password.
+                      Defaults to "password".
+                    type: string
+                  usernameKey:
+                    description: |-
+                      UsernameKey is the key in the Secret containing the username.
+                      Defaults to "username".
+                    type: string
+                required:
+                - name
+                type: object
+              insecureSkipVerify:
+                description: InsecureSkipVerify skips TLS certificate verification.
+                type: boolean
+              repository:
+                description: Repository is the repository to scan (e.g., "library/nginx").
+                type: string
+              sbomGeneration:
+                description: SBOMGeneration defines SBOM generation settings.
+                properties:
+                  enabled:
+                    description: Enabled enables SBOM generation.
+                    type: boolean
+                  format:
+                    description: |-
+                      Format specifies the SBOM format: "spdx-json", "cyclonedx-json", "syft-json".
+                      Defaults to "syft-json".
+                    type: string
+                  includeLicenses:
+                    description: IncludeLicenses includes license information in SBOM.
+                    type: boolean
+                  scanInterval:
+                    description: |-
+                      ScanInterval is the interval between SBOM scans in seconds.
+                      Typically matches vulnerability scan interval.
+                    format: int64
+                    type: integer
+                  tags:
+                    description: Tags specifies which tags to generate SBOM for. If
+                      empty, all tags are processed.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              scanConfig:
+                description: ScanConfig defines dynamic scan settings.
+                properties:
+                  concurrency:
+                    description: Concurrency is the number of concurrent requests
+                      when fetching image details.
+                    type: integer
+                  retryAttempts:
+                    description: RetryAttempts is the number of retry attempts on
+                      failure.
+                    type: integer
+                  retryDelay:
+                    description: RetryDelay is the delay between retry attempts (e.g.,
+                      "5s", "10s").
+                    type: string
+                  timeout:
+                    description: Timeout is the HTTP request timeout (e.g., "30s",
+                      "1m").
+                    type: string
+                type: object
+              scanInterval:
+                description: ScanInterval is the interval between scans in seconds.
+                format: int64
+                type: integer
+              tagFilter:
+                description: TagFilter defines filtering rules for tags.
+                properties:
+                  exclude:
+                    description: Exclude is a regex pattern for tags to exclude.
+                    type: string
+                  include:
+                    description: Include is a regex pattern for tags to include.
+                    type: string
+                  limit:
+                    description: Limit is the maximum number of tags to return. Zero
+                      means unlimited.
+                    type: integer
+                  sortBy:
+                    description: 'SortBy specifies the sort order: "newest", "oldest",
+                      "alphabetical".'
+                    type: string
+                type: object
+              url:
+                description: URL is the registry URL (e.g., "https://registry-1.docker.io").
+                type: string
+              vulnerabilityScanning:
+                description: VulnerabilityScanning defines vulnerability scanning
+                  settings.
+                properties:
+                  enabled:
+                    description: Enabled enables vulnerability scanning.
+                    type: boolean
+                  ignoreUnfixed:
+                    description: IgnoreUnfixed ignores vulnerabilities without a fix.
+                    type: boolean
+                  scanInterval:
+                    description: |-
+                      ScanInterval is the interval between vulnerability scans in seconds.
+                      Typically longer than tag scan interval.
+                    format: int64
+                    type: integer
+                  scanner:
+                    description: Scanner specifies which scanner to use. Currently
+                      only "trivy" is supported.
+                    type: string
+                  severityThreshold:
+                    description: |-
+                      SeverityThreshold is the minimum severity to report.
+                      Valid values: "CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN".
+                    type: string
+                  tags:
+                    description: Tags specifies which tags to scan. If empty, all
+                      tags are scanned.
+                    items:
+                      type: string
+                    type: array
+                type: object
+            required:
+            - repository
+            - url
+            type: object
+          status:
+            description: RegistryStatus defines the observed state of Registry.
+            properties:
+              images:
+                description: Images contains information about discovered images.
+                items:
+                  description: ImageInfo contains information about a single image
+                    tag.
+                  properties:
+                    digest:
+                      description: Digest is the image digest (SHA256).
+                      type: string
+                    sbom:
+                      description: SBOM contains Software Bill of Materials information.
+                      properties:
+                        dependencies:
+                          description: Dependencies contains critical dependency information.
+                          properties:
+                            direct:
+                              description: Direct is the number of direct dependencies.
+                              type: integer
+                            outdated:
+                              description: Outdated is the number of packages with
+                                newer versions available.
+                              type: integer
+                            topLevelPackages:
+                              description: TopLevelPackages contains the most important
+                                packages (base OS, frameworks).
+                              items:
+                                type: string
+                              type: array
+                            transitive:
+                              description: Transitive is the number of transitive
+                                dependencies.
+                              type: integer
+                          type: object
+                        format:
+                          description: Format is the SBOM format (e.g., "spdx-json",
+                            "cyclonedx-json", "syft-json").
+                          type: string
+                        generatedAt:
+                          description: GeneratedAt is the timestamp when SBOM was
+                            generated.
+                          format: date-time
+                          type: string
+                        licenses:
+                          description: Licenses contains summary of licenses found.
+                          properties:
+                            byLicense:
+                              additionalProperties:
+                                type: integer
+                              description: ByLicense is a map of license name to count.
+                              type: object
+                            riskyLicenses:
+                              description: RiskyLicenses contains licenses that may
+                                pose compliance risks.
+                              items:
+                                type: string
+                              type: array
+                            total:
+                              description: Total is the total number of packages with
+                                identified licenses.
+                              type: integer
+                            unknown:
+                              description: Unknown is the number of packages with
+                                unknown licenses.
+                              type: integer
+                          type: object
+                        packageTypes:
+                          additionalProperties:
+                            type: integer
+                          description: PackageTypes contains summary by package type.
+                          type: object
+                        packages:
+                          description: |-
+                            Packages contains the list of packages in the image.
+                            Limited to top-level packages for status size optimization.
+                          items:
+                            description: PackageInfo contains information about a
+                              software package in the image.
+                            properties:
+                              critical:
+                                description: Critical indicates if this package has
+                                  critical vulnerabilities.
+                                type: boolean
+                              license:
+                                description: License is the package license.
+                                type: string
+                              name:
+                                description: Name is the package name.
+                                type: string
+                              type:
+                                description: Type is the package type (e.g., "deb",
+                                  "rpm", "python", "npm", "go", "java").
+                                type: string
+                              version:
+                                description: Version is the package version.
+                                type: string
+                              vulnerabilityCount:
+                                description: VulnerabilityCount is the number of known
+                                  vulnerabilities in this package.
+                                type: integer
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        totalPackages:
+                          description: TotalPackages is the total number of packages
+                            found.
+                          type: integer
+                      type: object
+                    size:
+                      description: Size is the total image size in bytes.
+                      format: int64
+                      type: integer
+                    tag:
+                      description: Tag is the image tag.
+                      type: string
+                    vulnerabilities:
+                      description: Vulnerabilities contains vulnerability scan results.
+                      properties:
+                        critical:
+                          description: Critical is the count of critical vulnerabilities.
+                          type: integer
+                        high:
+                          description: High is the count of high severity vulnerabilities.
+                          type: integer
+                        lastScanTime:
+                          description: LastScanTime is the timestamp of the last vulnerability
+                            scan.
+                          format: date-time
+                          type: string
+                        low:
+                          description: Low is the count of low severity vulnerabilities.
+                          type: integer
+                        medium:
+                          description: Medium is the count of medium severity vulnerabilities.
+                          type: integer
+                        topCVEs:
+                          description: TopCVEs contains the top critical/high CVEs
+                            for quick reference.
+                          items:
+                            description: CVEInfo contains details about a specific
+                              vulnerability.
+                            properties:
+                              fixedVersion:
+                                description: FixedVersion is the version that fixes
+                                  the vulnerability.
+                                type: string
+                              id:
+                                description: ID is the CVE identifier (e.g., "CVE-2024-1234").
+                                type: string
+                              installedVersion:
+                                description: InstalledVersion is the currently installed
+                                  version.
+                                type: string
+                              package:
+                                description: Package is the affected package name.
+                                type: string
+                              severity:
+                                description: Severity is the vulnerability severity
+                                  level.
+                                type: string
+                              title:
+                                description: Title is a short description of the vulnerability.
+                                type: string
+                            required:
+                            - id
+                            - package
+                            - severity
+                            type: object
+                          type: array
+                        total:
+                          description: Total is the total count of vulnerabilities.
+                          type: integer
+                        unknown:
+                          description: Unknown is the count of unknown severity vulnerabilities.
+                          type: integer
+                      type: object
+                  required:
+                  - tag
+                  type: object
+                type: array
+              lastScanStatus:
+                description: 'LastScanStatus is the status of the last scan: "Success"
+                  or "Failed".'
+                type: string
+              lastScanTime:
+                description: LastScanTime is the timestamp of the last scan.
+                format: date-time
+                type: string
+              message:
+                description: Message contains error details when LastScanStatus is
+                  "Failed".
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
