@@ -63,6 +63,10 @@ jobs:
         id: lowercase
         run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Sanitize tag name
+        id: sanitize
+        run: echo "tag=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> $GITHUB_OUTPUT
+
       - name: Setup
         uses: deckhouse/modules-actions/setup@main
         with:
@@ -75,4 +79,4 @@ jobs:
         with:
           module_source: ghcr.io/${{ steps.lowercase.outputs.owner }}
           module_name: ${{ env.MODULE_NAME }}
-          module_tag: ${{ github.ref_name }}
+          module_tag: ${{ steps.sanitize.outputs.tag }}
