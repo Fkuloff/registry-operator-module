@@ -1,4 +1,6 @@
-.PHONY: generate manifests build run test docker-build docker-push install uninstall deploy undeploy
+.PHONY: help generate manifests build run test test-race test-coverage test-coverage-html \
+        fmt vet lint lint-fix mod-tidy docker-build docker-push install uninstall \
+        controller-gen golangci-lint
 
 # Image URL to use for building/pushing image targets
 IMG ?= registry-operator:latest
@@ -6,15 +8,15 @@ IMG ?= registry-operator:latest
 # Source directory
 SRC_DIR = images/registry-operator/src
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
-
 # CONTAINER_TOOL defines the container tool to be used for building images.
 CONTAINER_TOOL ?= docker
+
+# Detect OS for binary extensions
+ifeq ($(OS),Windows_NT)
+	BINARY_EXT = .exe
+else
+	BINARY_EXT =
+endif
 
 ##@ General
 
@@ -24,10 +26,10 @@ help: ## Display this help.
 ##@ Development
 
 manifests: controller-gen ## Generate CRD manifests.
-	$(CONTROLLER_GEN) crd paths="./$(SRC_DIR)/apis/..." output:crd:dir=./crds
+	$(CONTROLLER_GEN) crd paths="./$(SRC_DIR)/apis/registry.kubecontroller.io/v1alpha1" output:crd:dir=./crds
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object paths="./$(SRC_DIR)/apis/..."
+	$(CONTROLLER_GEN) object paths="./$(SRC_DIR)/apis/registry.kubecontroller.io/v1alpha1"
 
 fmt: ## Run go fmt against code.
 	cd $(SRC_DIR) && go fmt ./...
@@ -41,15 +43,25 @@ lint: golangci-lint ## Run golangci-lint.
 lint-fix: golangci-lint ## Run golangci-lint with auto-fix.
 	cd $(SRC_DIR) && $(GOLANGCI_LINT) run --config ../../../.golangci.yml --fix ./...
 
-test: fmt vet ## Run tests.
+test: ## Run tests.
 	cd $(SRC_DIR) && go test ./... -v
+
+test-race: ## Run tests with race detector (requires CGO).
+	cd $(SRC_DIR) && CGO_ENABLED=1 go test ./... -v -race
+
+test-coverage: ## Run tests with coverage report.
+	cd $(SRC_DIR) && go test ./... -coverprofile=coverage.out -covermode=atomic
+	cd $(SRC_DIR) && go tool cover -func=coverage.out
+
+test-coverage-html: test-coverage ## Run tests with HTML coverage report.
+	cd $(SRC_DIR) && go tool cover -html=coverage.out
 
 ##@ Build
 
-build: generate fmt vet ## Build manager binary.
+build: generate ## Build manager binary.
 	cd $(SRC_DIR) && go build -o ../../../bin/registry-operator ./cmd/main.go
 
-run: manifests generate fmt vet ## Run from your host.
+run: manifests generate ## Run from your host.
 	cd $(SRC_DIR) && go run ./cmd/main.go
 
 docker-build: ## Build docker image.
@@ -68,19 +80,28 @@ mod-tidy: ## Run go mod tidy.
 install: manifests ## Install CRDs into the K8s cluster.
 	kubectl apply -f crds/
 
-uninstall: manifests ## Uninstall CRDs from the K8s cluster.
+uninstall: ## Uninstall CRDs from the K8s cluster.
 	kubectl delete -f crds/
 
 ##@ Build Dependencies
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-.PHONY: controller-gen
+CONTROLLER_GEN = $(CURDIR)/bin/controller-gen$(BINARY_EXT)
 controller-gen: ## Download controller-gen locally if necessary.
-	@test -s $(CONTROLLER_GEN) || \
-	GOBIN=$(shell pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+ifeq (,$(wildcard $(CONTROLLER_GEN)))
+	GOBIN=$(CURDIR)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+endif
 
-GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-.PHONY: golangci-lint
+GOLANGCI_LINT = $(CURDIR)/bin/golangci-lint$(BINARY_EXT)
+GOLANGCI_LINT_VERSION = 2.8.0
 golangci-lint: ## Download golangci-lint locally if necessary.
-	@test -s $(GOLANGCI_LINT) || \
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell pwd)/bin
+ifeq (,$(wildcard $(GOLANGCI_LINT)))
+	@echo "Downloading golangci-lint v$(GOLANGCI_LINT_VERSION)..."
+ifeq ($(OS),Windows_NT)
+	@powershell -Command "Invoke-WebRequest -Uri 'https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCI_LINT_VERSION)/golangci-lint-$(GOLANGCI_LINT_VERSION)-windows-amd64.zip' -OutFile 'golangci-lint.zip'"
+	@powershell -Command "Expand-Archive -Path 'golangci-lint.zip' -DestinationPath 'bin/temp' -Force"
+	@powershell -Command "Move-Item -Path 'bin/temp/golangci-lint-$(GOLANGCI_LINT_VERSION)-windows-amd64/golangci-lint.exe' -Destination '$(GOLANGCI_LINT)' -Force"
+	@powershell -Command "Remove-Item -Path 'golangci-lint.zip','bin/temp' -Recurse -Force"
+else
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(CURDIR)/bin v$(GOLANGCI_LINT_VERSION)
+endif
+endif

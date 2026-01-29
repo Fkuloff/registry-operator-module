@@ -173,51 +173,8 @@ func findAvailableUpdates(
 			continue
 		}
 
-		isNewer := isNewerVersion(currentTag, img.Tag)
-		update := v1alpha1.AvailableUpdate{
-			Tag:   img.Tag,
-			Newer: isNewer,
-		}
-
-		// Calculate CVE fixes
-		if currentInfo.Vulnerabilities != nil && img.Vulnerabilities != nil {
-			currentCritical := currentInfo.Vulnerabilities.Critical
-			newCritical := img.Vulnerabilities.Critical
-
-			if newCritical < currentCritical {
-				update.CriticalCVEsFixed = currentCritical - newCritical
-			} else if newCritical > currentCritical {
-				update.NewCVEs = newCritical - currentCritical
-			}
-
-			currentHigh := currentInfo.Vulnerabilities.High
-			newHigh := img.Vulnerabilities.High
-
-			if newHigh < currentHigh {
-				update.HighCVEsFixed = currentHigh - newHigh
-			}
-		}
-
-		// Calculate size difference
-		if currentInfo.Size > 0 && img.Size > 0 {
-			update.SizeDiff = img.Size - currentInfo.Size
-		}
-
-		// Generate recommendation
-		switch {
-		case update.CriticalCVEsFixed > 0:
-			update.Recommendation = RecommendationUrgentUpdate
-		case update.HighCVEsFixed > 0:
-			update.Recommendation = RecommendationRecommended
-		case update.NewCVEs > 0:
-			update.Recommendation = RecommendationCaution
-		default:
-			update.Recommendation = RecommendationAvailable
-		}
-
-		// Only include updates that are either newer or have security improvements
-		hasSecurityImprovement := update.CriticalCVEsFixed > 0 || update.HighCVEsFixed > 0
-		if isNewer || hasSecurityImprovement {
+		update := buildUpdateInfo(currentTag, currentInfo, img)
+		if shouldIncludeUpdate(update) {
 			updates = append(updates, update)
 		}
 	}
@@ -229,6 +186,64 @@ func findAvailableUpdates(
 	}
 
 	return updates
+}
+
+// buildUpdateInfo creates an AvailableUpdate with all calculated fields.
+func buildUpdateInfo(currentTag string, currentInfo *v1alpha1.ImageInfo, img v1alpha1.ImageInfo) v1alpha1.AvailableUpdate {
+	update := v1alpha1.AvailableUpdate{
+		Tag:   img.Tag,
+		Newer: isNewerVersion(currentTag, img.Tag),
+	}
+
+	calculateCVEDiff(&update, currentInfo.Vulnerabilities, img.Vulnerabilities)
+	calculateSizeDiff(&update, currentInfo.Size, img.Size)
+	update.Recommendation = calculateRecommendation(update)
+
+	return update
+}
+
+// calculateCVEDiff calculates CVE fixes and new CVEs between versions.
+func calculateCVEDiff(update *v1alpha1.AvailableUpdate, current, candidate *v1alpha1.VulnerabilitySummary) {
+	if current == nil || candidate == nil {
+		return
+	}
+
+	if candidate.Critical < current.Critical {
+		update.CriticalCVEsFixed = current.Critical - candidate.Critical
+	} else if candidate.Critical > current.Critical {
+		update.NewCVEs = candidate.Critical - current.Critical
+	}
+
+	if candidate.High < current.High {
+		update.HighCVEsFixed = current.High - candidate.High
+	}
+}
+
+// calculateSizeDiff calculates size difference between images.
+func calculateSizeDiff(update *v1alpha1.AvailableUpdate, currentSize, newSize int64) {
+	if currentSize > 0 && newSize > 0 {
+		update.SizeDiff = newSize - currentSize
+	}
+}
+
+// calculateRecommendation determines update recommendation based on CVE fixes.
+func calculateRecommendation(update v1alpha1.AvailableUpdate) string {
+	switch {
+	case update.CriticalCVEsFixed > 0:
+		return RecommendationUrgentUpdate
+	case update.HighCVEsFixed > 0:
+		return RecommendationRecommended
+	case update.NewCVEs > 0:
+		return RecommendationCaution
+	default:
+		return RecommendationAvailable
+	}
+}
+
+// shouldIncludeUpdate checks if update should be included in results.
+func shouldIncludeUpdate(update v1alpha1.AvailableUpdate) bool {
+	hasSecurityImprovement := update.CriticalCVEsFixed > 0 || update.HighCVEsFixed > 0
+	return update.Newer || hasSecurityImprovement
 }
 
 // buildImageMap creates a map of tag -> ImageInfo for quick lookup.
