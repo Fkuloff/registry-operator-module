@@ -47,4 +47,3 @@ kubeconfig
 !README.md
 
 images_tags_werf.json
-base_images.yml
