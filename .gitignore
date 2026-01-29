@@ -17,7 +17,6 @@ coverage.html
 # Go workspace
 go.work
 go.work.sum
-go.sum
 
 # Vendor
 vendor/
