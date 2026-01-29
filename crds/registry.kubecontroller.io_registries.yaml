@@ -110,9 +110,6 @@ spec:
                       Format specifies the SBOM format: "spdx-json", "cyclonedx-json", "syft-json".
                       Defaults to "syft-json".
                     type: string
-                  includeLicenses:
-                    description: IncludeLicenses includes license information in SBOM.
-                    type: boolean
                   scanInterval:
                     description: |-
                       ScanInterval is the interval between SBOM scans in seconds.
@@ -368,29 +365,6 @@ spec:
                             generated.
                           format: date-time
                           type: string
-                        licenses:
-                          description: Licenses contains summary of licenses found.
-                          properties:
-                            byLicense:
-                              additionalProperties:
-                                type: integer
-                              description: ByLicense is a map of license name to count.
-                              type: object
-                            riskyLicenses:
-                              description: RiskyLicenses contains licenses that may
-                                pose compliance risks.
-                              items:
-                                type: string
-                              type: array
-                            total:
-                              description: Total is the total number of packages with
-                                identified licenses.
-                              type: integer
-                            unknown:
-                              description: Unknown is the number of packages with
-                                unknown licenses.
-                              type: integer
-                          type: object
                         packageTypes:
                           additionalProperties:
                             type: integer
@@ -408,9 +382,6 @@ spec:
                                 description: Critical indicates if this package has
                                   critical vulnerabilities.
                                 type: boolean
-                              license:
-                                description: License is the package license.
-                                type: string
                               name:
                                 description: Name is the package name.
                                 type: string
