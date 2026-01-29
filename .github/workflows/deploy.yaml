@@ -51,7 +51,7 @@ jobs:
       - name: Deploy
         uses: deckhouse/modules-actions/deploy@main
         with:
-          module_source: ghcr.io/${{ steps.lowercase.outputs.owner }}
+          module_source: ghcr.io/${{ steps.lowercase.outputs.owner }}/modules
           module_name: ${{ env.MODULE_NAME }}
           module_tag: ${{ steps.sanitize.outputs.tag }}
           release_channel: ${{ inputs.release_channel }}
