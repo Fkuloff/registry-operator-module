@@ -1,4 +1,4 @@
 ---
 image: controller
-context: .
+context: images/registry-operator
 dockerfile: Dockerfile

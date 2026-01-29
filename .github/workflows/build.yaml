@@ -3,6 +3,10 @@ name: Build
 on:
   push:
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   CI_COMMIT_REF_NAME: ${{ github.ref_name }}
   MODULE_NAME: registry-operator
@@ -17,13 +21,17 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: images/registry-operator/src/go.sum
 
       - name: Run tests
         run: make test
 
       - name: Run tests with race detector
         run: make test-race
+        env:
+          CGO_ENABLED: 1
 
       - name: Run tests with coverage
         run: make test-coverage
@@ -37,7 +45,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: images/registry-operator/src/go.sum
 
       - name: Run linter
         run: make lint
@@ -49,16 +59,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Lowercase repository owner
+        id: lowercase
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Sanitize tag name
+        id: sanitize
+        run: echo "tag=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> $GITHUB_OUTPUT
+
       - name: Setup
         uses: deckhouse/modules-actions/setup@main
         with:
           registry: ghcr.io
-          registry-login: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          registry_login: ${{ github.actor }}
+          registry_password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         uses: deckhouse/modules-actions/build@main
         with:
-          module-source: ghcr.io/${{ github.repository_owner }}
-          module-name: ${{ env.MODULE_NAME }}
-          module-tag: ${{ github.ref_name }}
+          module_source: ghcr.io/${{ steps.lowercase.outputs.owner }}/modules
+          module_name: ${{ env.MODULE_NAME }}
+          module_tag: ${{ steps.sanitize.outputs.tag }}

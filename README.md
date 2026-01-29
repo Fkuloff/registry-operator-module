@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://kubernetes.io/images/kubernetes-horizontal-color.png" width="300" alt="Kubernetes">
-</p>
-
 <h1 align="center">Registry Operator</h1>
 
 <p align="center">

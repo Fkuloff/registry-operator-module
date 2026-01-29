@@ -1,9 +1,13 @@
 # Base Images
 {{- $baseImages := .Files.Get "base_images.yml" | fromYaml }}
 {{- range $k, $v := $baseImages }}
-  {{- $baseImagePath := printf "%s/%s" (trimSuffix "/" $baseImages.REGISTRY_PATH) (trimSuffix "/" $v) }}
   {{- if ne $k "REGISTRY_PATH" }}
-  {{- $_ := set $baseImages $k $baseImagePath }}
+    {{- if $baseImages.REGISTRY_PATH }}
+      {{- $baseImagePath := printf "%s/%s" (trimSuffix "/" $baseImages.REGISTRY_PATH) (trimSuffix "/" $v) }}
+      {{- $_ := set $baseImages $k $baseImagePath }}
+    {{- else }}
+      {{- $_ := set $baseImages $k $v }}
+    {{- end }}
   {{- end }}
 {{- end }}
 {{- $_ := unset $baseImages "REGISTRY_PATH" }}
@@ -11,8 +15,10 @@
 {{- $_ := set . "Images" $baseImages }}
 # base images artifacts
 {{- range $k, $v := .Images }}
+{{- if ne $k "SCRATCH" }}
 ---
 image: {{ $k }}
 from: {{ $v }}
 final: false
+{{- end }}
 {{- end }}
