@@ -53,8 +53,8 @@ jobs:
         uses: deckhouse/modules-actions/setup@main
         with:
           registry: ghcr.io
-          registry-login: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          registry_login: ${{ github.actor }}
+          registry_password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         uses: deckhouse/modules-actions/build@main
