@@ -15,8 +15,10 @@
 {{- $_ := set . "Images" $baseImages }}
 # base images artifacts
 {{- range $k, $v := .Images }}
+{{- if ne $k "SCRATCH" }}
 ---
 image: {{ $k }}
 from: {{ $v }}
 final: false
+{{- end }}
 {{- end }}
