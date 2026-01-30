@@ -32,11 +32,12 @@ kubectl apply -f production.yaml
 - Vulnerability scanning (Trivy)
 - SBOM generation (Syft)
 - Drift detection (Deployments/StatefulSets/DaemonSets)
+- Provenance tracking (SLSA attestations)
 - Private registry authentication
 - Concurrent processing
 - Advanced scan configuration
 
-**Use case:** Production environments, security compliance, drift monitoring
+**Use case:** Production environments, security compliance, drift monitoring, supply chain security
 
 ---
 
@@ -54,6 +55,9 @@ kubectl get registry <name> -o json | jq '.status.images[].vulnerabilities'
 
 # Check drift detection
 kubectl get registry <name> -o json | jq '.status.drift.summary'
+
+# Check provenance info
+kubectl get registry <name> -o json | jq '.status.images[].provenance'
 ```
 
 ---

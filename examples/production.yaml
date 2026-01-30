@@ -109,6 +109,22 @@ spec:
 
     # Drift check interval in seconds (default: scanInterval)
     checkInterval: 600
+
+  # ============================================================================
+  # PROVENANCE TRACKING (SLSA)
+  # ============================================================================
+
+  provenanceTracking:
+    # Enable provenance tracking (reads SLSA attestations from registry)
+    enabled: true
+
+    # Provenance check interval in seconds (default: 3600)
+    scanInterval: 7200
+
+    # Specific tags to check provenance for (empty = all tags)
+    # tags:
+    #   - latest
+    #   - v1.0.0
 ---
 # ============================================================================
 # SECRET FOR PRIVATE REGISTRY (Optional)

@@ -44,6 +44,26 @@ type RegistrySpec struct {
 	// DriftDetection defines drift detection settings.
 	// +optional
 	DriftDetection *DriftDetectionConfig `json:"driftDetection,omitempty"`
+
+	// ProvenanceTracking defines provenance tracking settings.
+	// +optional
+	ProvenanceTracking *ProvenanceConfig `json:"provenanceTracking,omitempty"`
+}
+
+// ProvenanceConfig defines provenance tracking settings.
+type ProvenanceConfig struct {
+	// Enabled enables provenance tracking.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// ScanInterval is the interval between provenance checks in seconds.
+	// Defaults to 3600 (1 hour).
+	// +optional
+	ScanInterval int64 `json:"scanInterval,omitempty"`
+
+	// Tags specifies which tags to check provenance for. If empty, all tags are processed.
+	// +optional
+	Tags []string `json:"tags,omitempty"`
 }
 
 // SBOMConfig defines SBOM generation settings.
@@ -193,6 +213,10 @@ type ImageInfo struct {
 	// SBOM contains Software Bill of Materials information.
 	// +optional
 	SBOM *SBOMInfo `json:"sbom,omitempty"`
+
+	// Provenance contains image provenance information.
+	// +optional
+	Provenance *ProvenanceInfo `json:"provenance,omitempty"`
 }
 
 // VulnerabilitySummary contains vulnerability scan results for an image.
@@ -321,6 +345,34 @@ type DependencySummary struct {
 	// TopLevelPackages contains the most important packages (base OS, frameworks).
 	// +optional
 	TopLevelPackages []string `json:"topLevelPackages,omitempty"`
+}
+
+// ProvenanceInfo contains provenance information for an image.
+type ProvenanceInfo struct {
+	// Builder is the builder identity from SLSA provenance.
+	// Example: "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml"
+	// +optional
+	Builder string `json:"builder,omitempty"`
+
+	// SourceRepo is the source repository URI.
+	// +optional
+	SourceRepo string `json:"sourceRepo,omitempty"`
+
+	// SourceCommit is the source commit digest (SHA).
+	// +optional
+	SourceCommit string `json:"sourceCommit,omitempty"`
+
+	// SLSALevel is the derived SLSA provenance level (0-3).
+	// +optional
+	SLSALevel int `json:"slsaLevel,omitempty"`
+
+	// Signed indicates whether a signature attestation was found.
+	// +optional
+	Signed bool `json:"signed,omitempty"`
+
+	// LastCheckTime is the timestamp of the last provenance check.
+	// +optional
+	LastCheckTime *metav1.Time `json:"lastCheckTime,omitempty"`
 }
 
 // DriftDetectionConfig defines drift detection settings.

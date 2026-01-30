@@ -34,6 +34,7 @@ Registry Operator is a Kubernetes-native solution for comprehensive container re
 | **SBOM Generation** | Generates Software Bill of Materials using Syft for dependency tracking |
 | **Dependency Analysis** | Distinguishes direct vs transitive dependencies |
 | **Drift Detection** | Compares running workloads (Deployments/StatefulSets/DaemonSets) with registry images using semantic versioning |
+| **Provenance Tracking** | Reads SLSA provenance attestations to verify image origin and build integrity |
 | **Tag Filtering** | Include/exclude by regex, limit count, sort order |
 | **Private Registries** | Supports authentication via Kubernetes Secrets |
 | **Worker Pool Pattern** | Efficient concurrent processing with configurable parallelism |
@@ -189,6 +190,10 @@ spec:
       - production
       - staging
     checkInterval: 600
+
+  provenanceTracking:
+    enabled: true
+    scanInterval: 3600
 ```
 
 **Note:** For a fully annotated production-ready example, see [examples/production.yaml](examples/production.yaml)
@@ -221,6 +226,34 @@ spec:
     checkInterval: 600      # Check every 10 minutes
 ```
 
+### Provenance Tracking (SLSA)
+
+```yaml
+apiVersion: registry.kubecontroller.io/v1alpha1
+kind: Registry
+metadata:
+  name: nginx-provenance
+spec:
+  url: https://ghcr.io
+  repository: myorg/myapp
+  scanInterval: 300
+
+  # Track image provenance (SLSA attestations)
+  provenanceTracking:
+    enabled: true
+    scanInterval: 3600      # Check every hour
+    # tags:                 # Optional: specific tags only
+    #   - latest
+    #   - v1.0.0
+```
+
+**Provenance Status Fields:**
+- `builder` — Build system identity (e.g., GitHub Actions SLSA generator)
+- `sourceRepo` — Source repository URL
+- `sourceCommit` — Git commit SHA
+- `slsaLevel` — SLSA level (0-3) derived from builder
+- `signed` — Whether signature attestation was found
+
 ### Check Status
 
 ```bash
@@ -250,6 +283,15 @@ kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.sta
 
 # Check which workloads need urgent updates
 kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.recommendation=="URGENT_UPDATE")'
+
+# View provenance information
+kubectl get registry nginx -o jsonpath='{.status.images[0].provenance}' | jq .
+
+# Find images with SLSA L3 provenance
+kubectl get registry nginx -o json | jq '.status.images[] | select(.provenance.slsaLevel >= 3)'
+
+# Find signed images
+kubectl get registry nginx -o json | jq '.status.images[] | select(.provenance.signed == true)'
 ```
 
 ## Configuration
@@ -275,6 +317,9 @@ kubectl get registry nginx -o json | jq '.status.drift.workloads[] | select(.rec
 | `driftDetection.enabled` | bool | | false | Enable drift detection (tracks Deployments/StatefulSets/DaemonSets) |
 | `driftDetection.namespaces` | []string | | [] | Namespaces to monitor (empty=all) |
 | `driftDetection.checkInterval` | int64 | | scanInterval | Drift check interval (seconds) |
+| `provenanceTracking.enabled` | bool | | false | Enable SLSA provenance tracking |
+| `provenanceTracking.scanInterval` | int64 | | 3600 | Provenance check interval (seconds) |
+| `provenanceTracking.tags` | []string | | [] | Tags to check (empty=all) |
 | `scanConfig.timeout` | string | | 30s | HTTP request timeout |
 | `scanConfig.retryAttempts` | int | | 3 | Retry attempts on failure |
 | `scanConfig.concurrency` | int | | 1 | Parallel image processing |

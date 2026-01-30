@@ -32,12 +32,12 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
 │       │                │         │ - Top packages      │            │
 │       │                │         └─────────────────────┘            │
 │       │                │                                             │
-│       │      ┌─────────┴─────────────────┐                          │
-│       └─────▶│   Drift Detection         │                          │
-│              │ - Workload Scanner        │                          │
-│              │ - Drift Analyzer          │                          │
-│              │ - Semver Comparison       │                          │
-│              └───────────────────────────┘                          │
+│       │      ┌─────────┴─────────────────┐  ┌─────────────────────┐│
+│       └─────▶│   Drift Detection         │  │ Provenance Scanner  ││
+│              │ - Workload Scanner        │  │ - OCI Referrers API ││
+│              │ - Drift Analyzer          │  │ - SLSA attestations ││
+│              │ - Semver Comparison       │  │ - Builder/Source    ││
+│              └───────────────────────────┘  └─────────────────────┘│
 └──────────────────────┼─────────────────┬────────────────────────────┘
                        │                 │
                        ▼                 ▼
@@ -125,6 +125,19 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
                             │                   │
                             ▼◀──────────────────┘
                 ┌───────────────────────┐
+                │ Provenance tracking?  │──No───┐
+                │ (if enabled & due)    │       │
+                └───────────────────────┘       │
+                            │ Yes               │
+                            ▼                   │
+                ┌───────────────────────┐       │
+                │ Fetch attestations    │       │
+                │ via OCI Referrers API │       │
+                │ + parse SLSA provenance│      │
+                └───────────────────────┘       │
+                            │                   │
+                            ▼◀──────────────────┘
+                ┌───────────────────────┐
                 │ Drift detection?      │──No───┐
                 │ (if enabled & due)    │       │
                 └───────────────────────┘       │
@@ -166,6 +179,7 @@ Key methods:
 - `scanRegistry()` — fetch tags and image details
 - `scanVulnerabilities()` — run Trivy scans
 - `scanSBOM()` — generate SBOM with Syft
+- `scanProvenance()` — fetch SLSA attestations
 - `filterTags()` — apply include/exclude/limit filters
 - `fetchImageDetails()` — worker pool for parallel processing
 
@@ -227,6 +241,30 @@ Features:
 - Tracks CVE fixes in available updates
 - Multi-namespace support
 
+### Provenance Scanner
+
+SLSA provenance tracking in `internal/provenance/`.
+
+Uses [go-containerregistry](https://github.com/google/go-containerregistry) OCI Referrers API to fetch attestations.
+
+Features:
+- Reads SLSA provenance attestations (v0.2 and v1.0 formats)
+- Extracts builder identity and source information
+- Derives SLSA level (0-3) from builder ID
+- Detects signature attestations
+- No external CLI dependencies (pure Go)
+
+Supported attestation formats:
+- In-toto Statement v0.1 / v1
+- SLSA Provenance v0.2 / v1.0
+- Cosign signature attestations
+
+SLSA Level derivation:
+- **Level 3**: Known builders (SLSA GitHub Generator, Google Cloud Build hosted)
+- **Level 2**: GitHub Actions builders, Cloud Build
+- **Level 1**: Any other builder with provenance attestation
+- **Level 0**: No attestation found
+
 ## CRD Schema
 
 ### Registry Spec
@@ -243,6 +281,7 @@ Features:
 | `vulnerabilityScanning` | object | Trivy scan configuration |
 | `sbomGeneration` | object | Syft SBOM generation configuration |
 | `driftDetection` | object | Workload drift monitoring configuration |
+| `provenanceTracking` | object | SLSA provenance tracking configuration |
 
 ### Registry Status
 
@@ -263,6 +302,7 @@ Features:
 | `size` | int64 | Total size in bytes |
 | `vulnerabilities` | object | CVE summary (if scanned) |
 | `sbom` | object | SBOM data with packages and dependencies |
+| `provenance` | object | SLSA provenance info (builder, source, level) |
 
 ## Concurrency Model
 
@@ -304,5 +344,7 @@ Sequential per image. Each generation:
 | Trivy timeout | Skip image, continue with others |
 | Syft not installed | Skip SBOM generation, log warning |
 | Syft timeout | Skip image, continue with others |
+| Provenance API not supported | Return empty provenance (no error) |
+| No attestations found | Return empty provenance with timestamp |
 | Status update conflict | Retry once with fresh resource version |
 | Context cancelled | Graceful shutdown, drain worker pool |

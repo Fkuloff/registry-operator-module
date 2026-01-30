@@ -96,6 +96,25 @@ spec:
               insecureSkipVerify:
                 description: InsecureSkipVerify skips TLS certificate verification.
                 type: boolean
+              provenanceTracking:
+                description: ProvenanceTracking defines provenance tracking settings.
+                properties:
+                  enabled:
+                    description: Enabled enables provenance tracking.
+                    type: boolean
+                  scanInterval:
+                    description: |-
+                      ScanInterval is the interval between provenance checks in seconds.
+                      Defaults to 3600 (1 hour).
+                    format: int64
+                    type: integer
+                  tags:
+                    description: Tags specifies which tags to check provenance for.
+                      If empty, all tags are processed.
+                    items:
+                      type: string
+                    type: array
+                type: object
               repository:
                 description: Repository is the repository to scan (e.g., "library/nginx").
                 type: string
@@ -332,6 +351,34 @@ spec:
                     digest:
                       description: Digest is the image digest (SHA256).
                       type: string
+                    provenance:
+                      description: Provenance contains image provenance information.
+                      properties:
+                        builder:
+                          description: |-
+                            Builder is the builder identity from SLSA provenance.
+                            Example: "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml"
+                          type: string
+                        lastCheckTime:
+                          description: LastCheckTime is the timestamp of the last
+                            provenance check.
+                          format: date-time
+                          type: string
+                        signed:
+                          description: Signed indicates whether a signature attestation
+                            was found.
+                          type: boolean
+                        slsaLevel:
+                          description: SLSALevel is the derived SLSA provenance level
+                            (0-3).
+                          type: integer
+                        sourceCommit:
+                          description: SourceCommit is the source commit digest (SHA).
+                          type: string
+                        sourceRepo:
+                          description: SourceRepo is the source repository URI.
+                          type: string
+                      type: object
                     sbom:
                       description: SBOM contains Software Bill of Materials information.
                       properties:

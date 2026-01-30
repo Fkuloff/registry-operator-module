@@ -21,7 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+
 	"registry-operator/internal/drift"
+	"registry-operator/internal/provenance"
 	"registry-operator/internal/registry"
 	"registry-operator/internal/sbom"
 	"registry-operator/internal/vulnerability"
@@ -31,14 +34,15 @@ import (
 
 // Default configuration values.
 const (
-	_defaultScanInterval     = 300
-	_defaultTimeout          = 30 * time.Second
-	_defaultRetryAttempts    = 3
-	_defaultRetryDelay       = 5 * time.Second
-	_defaultConcurrency      = 1
-	_defaultVulnScanInterval = 3600
-	_defaultSBOMScanInterval = 3600
-	_registryFinalizer       = "registry.kubecontroller.io/finalizer"
+	_defaultScanInterval           = 300
+	_defaultTimeout                = 30 * time.Second
+	_defaultRetryAttempts          = 3
+	_defaultRetryDelay             = 5 * time.Second
+	_defaultConcurrency            = 1
+	_defaultVulnScanInterval       = 3600
+	_defaultSBOMScanInterval       = 3600
+	_defaultProvenanceScanInterval = 3600
+	_registryFinalizer             = "registry.kubecontroller.io/finalizer"
 )
 
 // RegistryReconciler reconciles Registry resources.
@@ -92,6 +96,11 @@ func (r *RegistryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if r.shouldScanSBOM(&reg) {
 		images = r.scanSBOM(ctx, logger, &reg, images)
+	}
+
+	if r.shouldScanProvenance(&reg) {
+		username, password, _ := r.getCredentials(ctx, &reg)
+		images = r.scanProvenance(ctx, logger, &reg, images, username, password)
 	}
 
 	var driftStatus *v1alpha1.DriftStatus
@@ -708,6 +717,113 @@ func (r *RegistryReconciler) getTagsToScanSBOM(sbomConfig *v1alpha1.SBOMConfig, 
 		return sbomConfig.Tags
 	}
 	return extractTags(images)
+}
+
+// shouldScanProvenance checks if provenance scanning should be performed.
+func (r *RegistryReconciler) shouldScanProvenance(reg *v1alpha1.Registry) bool {
+	provConfig := reg.Spec.ProvenanceTracking
+	if provConfig == nil || !provConfig.Enabled {
+		return false
+	}
+
+	provInterval := provConfig.ScanInterval
+	if provInterval <= 0 {
+		provInterval = _defaultProvenanceScanInterval
+	}
+
+	for _, img := range reg.Status.Images {
+		if img.Provenance == nil || img.Provenance.LastCheckTime == nil {
+			return true
+		}
+		elapsed := time.Since(img.Provenance.LastCheckTime.Time)
+		if elapsed >= time.Duration(provInterval)*time.Second {
+			return true
+		}
+	}
+
+	return false
+}
+
+// scanProvenance scans images for provenance attestations.
+func (r *RegistryReconciler) scanProvenance(
+	ctx context.Context,
+	logger logr.Logger,
+	reg *v1alpha1.Registry,
+	images []v1alpha1.ImageInfo,
+	username, password string,
+) []v1alpha1.ImageInfo {
+	provConfig := reg.Spec.ProvenanceTracking
+	if provConfig == nil {
+		return images
+	}
+
+	auth := authn.Anonymous
+	if username != "" {
+		auth = authn.FromConfig(authn.AuthConfig{
+			Username: username,
+			Password: password,
+		})
+	}
+
+	scanner := provenance.NewScanner(provenance.Config{
+		Auth:    auth,
+		Timeout: 30 * time.Second,
+	})
+
+	tagsToScan := r.getTagsToScanProvenance(provConfig, images)
+
+	logger.Info("starting provenance scan",
+		"registry", reg.Spec.URL,
+		"repository", reg.Spec.Repository,
+		"tagsToScan", len(tagsToScan),
+	)
+
+	for i, img := range images {
+		if !slices.Contains(tagsToScan, img.Tag) {
+			continue
+		}
+
+		// Provenance requires digest reference
+		if img.Digest == "" {
+			logger.V(1).Info("skipping provenance scan: no digest", "tag", img.Tag)
+			continue
+		}
+
+		imageRef := buildImageRefWithDigest(reg.Spec.URL, reg.Spec.Repository, img.Digest)
+		logger.V(1).Info("scanning image for provenance", "image", imageRef)
+
+		provInfo, err := scanner.Scan(ctx, imageRef)
+		if err != nil {
+			logger.Error(err, "scan image for provenance: failed", "image", imageRef)
+			continue
+		}
+
+		images[i].Provenance = provInfo
+
+		logger.Info("provenance scan completed",
+			"image", imageRef,
+			"builder", provInfo.Builder,
+			"slsaLevel", provInfo.SLSALevel,
+			"signed", provInfo.Signed,
+		)
+	}
+
+	return images
+}
+
+// getTagsToScanProvenance returns the list of tags to scan for provenance.
+func (r *RegistryReconciler) getTagsToScanProvenance(provConfig *v1alpha1.ProvenanceConfig, images []v1alpha1.ImageInfo) []string {
+	if len(provConfig.Tags) > 0 {
+		return provConfig.Tags
+	}
+	return extractTags(images)
+}
+
+// buildImageRefWithDigest constructs a full image reference using digest.
+func buildImageRefWithDigest(registryURL, repository, digest string) string {
+	host := strings.TrimPrefix(registryURL, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	return fmt.Sprintf("%s/%s@%s", host, repository, digest)
 }
 
 // shouldDetectDrift checks if drift detection should run.
