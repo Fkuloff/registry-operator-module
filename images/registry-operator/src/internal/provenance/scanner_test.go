@@ -201,7 +201,6 @@ func TestCleanGitURI(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with JSON payloads
 func TestExtractV02Provenance(t *testing.T) {
 	t.Parallel()
 
@@ -285,7 +284,6 @@ func TestExtractV02Provenance(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with JSON payloads
 func TestExtractV1Provenance(t *testing.T) {
 	t.Parallel()
 

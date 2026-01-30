@@ -68,7 +68,6 @@ func TestStripScheme(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestParseRepository(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -148,7 +147,6 @@ func TestParseRepository(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestParseTag(t *testing.T) {
 	tests := []struct {
 		name        string

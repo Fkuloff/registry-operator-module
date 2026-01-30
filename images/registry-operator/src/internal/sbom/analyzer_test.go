@@ -9,7 +9,6 @@ import (
 	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
 )
 
-//nolint:funlen // table-driven test with many cases
 func TestIsDirectDependency(t *testing.T) {
 	t.Parallel()
 
@@ -90,7 +89,6 @@ func TestIsDirectDependency(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestCalculatePackageImportance(t *testing.T) {
 	t.Parallel()
 
@@ -185,7 +183,6 @@ func TestCalculatePackageImportance(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestIdentifyTopLevelPackages(t *testing.T) {
 	t.Parallel()
 
@@ -318,7 +315,6 @@ func TestCountDirectDependencies(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestAnalyzeDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -389,7 +385,6 @@ func TestAnalyzeDependencies(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestEnrichWithVulnerabilities(t *testing.T) {
 	t.Parallel()
 

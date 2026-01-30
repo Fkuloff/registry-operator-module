@@ -1,4 +1,4 @@
-# golangci-lint configuration
+# golangci-lint configuration v2
 # Based on Kubernetes project standards
 # Reference: https://github.com/kubernetes/kubernetes/blob/master/hack/golangci.yaml
 
@@ -12,8 +12,10 @@ run:
 
 output:
   formats:
-    colored-line-number:
+    text:
       path: stdout
+      print-linter-name: true
+      print-issued-lines: true
   show-stats: true
 
 linters:
@@ -45,7 +47,6 @@ linters:
     # Best practices
     - unconvert         # Unnecessary conversions
     - nolintlint        # Ill-formed nolint directives
-    - contextcheck      # Context usage (important for k8s controllers)
     - importas          # Consistent import aliases
 
     # Performance
@@ -77,224 +78,174 @@ linters:
     - nakedret          # Too strict for k8s code
     - nilnil            # Rare edge case
     - exhaustive        # Too strict for enums
-    - modernize         # Can suggest unnecessary refactoring
     - gocognit          # Overlaps with gocyclo
     - nestif            # Covered by gocyclo
     - maintidx          # Experimental
 
-linters-settings:
-  # govet: comprehensive checks
-  govet:
-    enable-all: true
-    disable:
-      - shadow          # Variable shadowing - Kubernetes allows this
-      - fieldalignment  # Micro-optimization
-
-  # staticcheck: all checks except deprecations
-  staticcheck:
-    checks:
-      - all
-      - "-SA1019"       # Ignore deprecation warnings (handle separately)
-
-  # revive: Kubernetes-style rules
-  revive:
+  exclusions:
     rules:
-      # Kubernetes conventions
-      - name: exported
-        arguments:
-          - "checkPrivateReceivers"
-          - "disableStutteringCheck"  # Allow API stuttering (e.g., v1alpha1.Registry)
-      - name: indent-error-flow
-      - name: blank-imports
-      - name: context-as-argument
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: errorf
-      - name: context-keys-type
-      - name: early-return
+      # Exclude test files from strict linters
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - funlen
+          - errcheck
+          - gosec
+          - gocritic
+          - forbidigo
+          - loggercheck
 
-  # gocritic: Kubernetes enables most checks
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-      - experimental
-    disabled-checks:
-      - ifElseChain      # Kubernetes explicitly excludes this
-      - hugeParam        # Can be too strict
-      - rangeValCopy     # Can be too strict
-      - unnamedResult    # Named returns are acceptable
+      # Allow long main functions
+      - path: cmd/main\.go
+        linters:
+          - funlen
+          - gocyclo
 
-  # gosec: security with strict settings
-  gosec:
-    severity: medium
-    confidence: medium
-    excludes:
-      - G115            # Integer overflow - can be noisy
+      # Generated files - exclude all
+      - path: "zz_generated.*\\.go"
+        linters:
+          - all
 
-  # gocyclo: reasonable complexity limit
-  gocyclo:
-    min-complexity: 20
+      # Vendor code - exclude all
+      - path: vendor/
+        linters:
+          - all
 
-  # funlen: reasonable function length
-  funlen:
-    lines: 80
-    statements: 50
-    ignore-comments: true
+  settings:
+    # govet: comprehensive checks
+    govet:
+      enable-all: true
+      disable:
+        - shadow          # Variable shadowing - Kubernetes allows this
+        - fieldalignment  # Micro-optimization
 
-  # goimports: use module name for local imports
-  goimports:
-    local-prefixes: registry-operator
+    # staticcheck: all checks except deprecations
+    staticcheck:
+      checks:
+        - all
+        - "-SA1019"       # Ignore deprecation warnings (handle separately)
 
-  # gci: import ordering (Kubernetes style)
-  gci:
-    sections:
-      - standard                               # Standard Go packages
-      - default                                # External packages
-      - prefix(registry-operator)              # Local packages
-      - blank                                  # Blank imports
-      - dot                                    # Dot imports
-    custom-order: true
+    # revive: Kubernetes-style rules
+    revive:
+      rules:
+        # Kubernetes conventions
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "disableStutteringCheck"  # Allow API stuttering (e.g., v1alpha1.Registry)
+        - name: indent-error-flow
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: errorf
+        - name: context-keys-type
+        - name: early-return
 
-  # errcheck: check most errors
-  errcheck:
-    check-type-assertions: true
-    check-blank: false  # Kubernetes allows blank error checks in some cases
-    exclude-functions:
-      - (*github.com/go-logr/logr.Logger).Error
+    # gocritic: Kubernetes enables most checks
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - experimental
+      disabled-checks:
+        - ifElseChain      # Kubernetes explicitly excludes this
+        - hugeParam        # Can be too strict
+        - rangeValCopy     # Can be too strict
+        - unnamedResult    # Named returns are acceptable
 
-  # errorlint: error wrapping checks
-  errorlint:
-    errorf: true
-    asserts: true
-    comparison: true
+    # gosec: security with strict settings
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G115            # Integer overflow - can be noisy
 
-  # nolintlint: strict nolint directives
-  nolintlint:
-    allow-unused: false
-    require-explanation: true
-    require-specific: true
+    # gocyclo: reasonable complexity limit
+    gocyclo:
+      min-complexity: 20
 
-  # contextcheck: ensure proper context usage
-  contextcheck:
-    check-func: true
+    # funlen: reasonable function length
+    funlen:
+      lines: 80
+      statements: 50
+      ignore-comments: true
 
-  # forbidigo: prevent forbidden function calls (Kubernetes-style)
-  forbidigo:
-    forbid:
-      - p: ^fmt\.Print.*$
-        msg: "use logging framework instead of fmt.Print*"
-      - p: ^print$
-        msg: "use logging framework instead of print"
-      - p: ^println$
-        msg: "use logging framework instead of println"
-      - p: ^panic$
-        msg: "avoid panic, return errors instead"
-    exclude-godoc-examples: true
-    analyze-types: true
+    # errcheck: check most errors
+    errcheck:
+      check-type-assertions: true
+      check-blank: false  # Kubernetes allows blank error checks in some cases
+      exclude-functions:
+        - (*github.com/go-logr/logr.Logger).Error
 
-  # loggercheck: check key-value pairs for logger libraries
-  loggercheck:
-    kitlog: false
-    klog: true
-    logr: true
-    slog: false
-    zap: false
-    require-string-key: true
-    no-printf-like: true
+    # errorlint: error wrapping checks
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
 
-  # importas: enforce consistent import aliases
-  importas:
-    alias:
-      - pkg: k8s.io/api/core/v1
-        alias: corev1
-      - pkg: k8s.io/api/apps/v1
-        alias: appsv1
-      - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
-        alias: metav1
-      - pkg: k8s.io/apimachinery/pkg/api/errors
-        alias: apierrors
-      - pkg: sigs.k8s.io/controller-runtime
-        alias: ctrl
-      - pkg: github.com/go-logr/logr
-        alias: logr
+    # nolintlint: strict nolint directives
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+
+    # forbidigo: prevent forbidden function calls (Kubernetes-style)
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print.*$
+          msg: "use logging framework instead of fmt.Print*"
+        - pattern: ^print$
+          msg: "use logging framework instead of print"
+        - pattern: ^println$
+          msg: "use logging framework instead of println"
+        - pattern: ^panic$
+          msg: "avoid panic, return errors instead"
+      exclude-godoc-examples: true
+      analyze-types: true
+
+    # loggercheck: check key-value pairs for logger libraries
+    loggercheck:
+      kitlog: false
+      klog: true
+      logr: true
+      slog: false
+      zap: false
+      require-string-key: true
+      no-printf-like: true
+
+    # importas: enforce consistent import aliases
+    importas:
+      alias:
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/api/apps/v1
+          alias: appsv1
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/apimachinery/pkg/api/errors
+          alias: apierrors
+        - pkg: sigs.k8s.io/controller-runtime
+          alias: ctrl
+        - pkg: github.com/go-logr/logr
+          alias: logr
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
-  # Kubernetes uses minimal default exclusions
-  exclude-use-default: false
-
-  exclude-rules:
-    # Exclude some checks from test files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - funlen
-        - errcheck
-        - gosec
-        - gocritic
-        - forbidigo
-        - loggercheck
-
-    # Allow long main functions
-    - path: cmd/main\.go
-      linters:
-        - funlen
-        - gocyclo
-
-    # Allow long business logic functions (complex reconciliation/analysis)
-    - path: internal/controller/registry_controller\.go
-      text: "Function 'scanSBOM'"
-      linters:
-        - funlen
-    - path: internal/drift/analyzer\.go
-      text: "Function 'findAvailableUpdates'"
-      linters:
-        - funlen
-
-    # Generated files - exclude all
-    - path: "zz_generated.*\\.go"
-      linters:
-        - all
-    - path: ".*\\.pb\\.go$"
-      linters:
-        - all
-    - path: ".*\\.gen\\.go$"
-      linters:
-        - all
-
-    # Vendor code - exclude all
-    - path: vendor/
-      linters:
-        - all
-
-    # Allow dot imports in Ginkgo tests
-    - path: _test\.go
-      text: "dot-imports"
-      linters:
-        - revive
-
-    # Allow underscores in conversion functions (Kubernetes convention)
-    - text: "don't use underscores in Go names"
-      linters:
-        - revive
-      source: "func.*Convert.*|SetDefaults_"
-
 severity:
   default: error
-  case-sensitive: false
   rules:
     - severity: warning
       linters:

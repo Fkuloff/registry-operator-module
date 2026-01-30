@@ -11,7 +11,6 @@ import (
 	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
 )
 
-//nolint:funlen // table-driven test with many cases
 func TestFilterTags(t *testing.T) {
 	t.Parallel()
 
@@ -155,7 +154,6 @@ func TestFilterTags(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestGetScanConfig(t *testing.T) {
 	t.Parallel()
 
@@ -331,7 +329,6 @@ func TestGetScanConfig(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestBuildImageRef(t *testing.T) {
 	t.Parallel()
 
@@ -403,7 +400,6 @@ func TestBuildImageRef(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestShouldScanVulnerabilities(t *testing.T) {
 	t.Parallel()
 
@@ -528,7 +524,6 @@ func TestShouldScanVulnerabilities(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestShouldScanSBOM(t *testing.T) {
 	t.Parallel()
 

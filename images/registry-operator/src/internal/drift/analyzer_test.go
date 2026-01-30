@@ -9,7 +9,6 @@ import (
 	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
 )
 
-//nolint:funlen // table-driven test with many cases
 func TestIsNewerVersion(t *testing.T) {
 	t.Parallel()
 
@@ -190,7 +189,6 @@ func TestBuildImageMap(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestSortUpdates(t *testing.T) {
 	t.Parallel()
 
@@ -270,7 +268,6 @@ func TestSortUpdates(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestFindAvailableUpdates(t *testing.T) {
 	t.Parallel()
 
@@ -468,7 +465,6 @@ func TestFindAvailableUpdates(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestAnalyzeWorkload(t *testing.T) {
 	t.Parallel()
 
@@ -602,7 +598,6 @@ func TestAnalyzeWorkload(t *testing.T) {
 	}
 }
 
-//nolint:funlen // table-driven test with many cases
 func TestAnalyzeDrift(t *testing.T) {
 	t.Parallel()
 

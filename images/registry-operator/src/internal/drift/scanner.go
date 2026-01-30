@@ -120,7 +120,10 @@ func (s *Scanner) scanWorkloadType(
 func extractItemsTyped[T any](items []T) []client.Object {
 	result := make([]client.Object, len(items))
 	for i := range items {
-		result[i] = any(&items[i]).(client.Object)
+		obj, ok := any(&items[i]).(client.Object)
+		if ok {
+			result[i] = obj
+		}
 	}
 	return result
 }
@@ -151,7 +154,7 @@ func (s *Scanner) scanDeployments(
 		repository,
 		namespaces,
 		func(obj client.Object) (string, string, corev1.PodSpec) {
-			d := obj.(*appsv1.Deployment)
+			d, _ := obj.(*appsv1.Deployment)
 			return d.Namespace, d.Name, d.Spec.Template.Spec
 		},
 	)
@@ -170,7 +173,7 @@ func (s *Scanner) scanStatefulSets(
 		repository,
 		namespaces,
 		func(obj client.Object) (string, string, corev1.PodSpec) {
-			s := obj.(*appsv1.StatefulSet)
+			s, _ := obj.(*appsv1.StatefulSet)
 			return s.Namespace, s.Name, s.Spec.Template.Spec
 		},
 	)
@@ -189,7 +192,7 @@ func (s *Scanner) scanDaemonSets(
 		repository,
 		namespaces,
 		func(obj client.Object) (string, string, corev1.PodSpec) {
-			d := obj.(*appsv1.DaemonSet)
+			d, _ := obj.(*appsv1.DaemonSet)
 			return d.Namespace, d.Name, d.Spec.Template.Spec
 		},
 	)

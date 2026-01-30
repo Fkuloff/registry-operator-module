@@ -757,19 +757,7 @@ func (r *RegistryReconciler) scanProvenance(
 		return images
 	}
 
-	auth := authn.Anonymous
-	if username != "" {
-		auth = authn.FromConfig(authn.AuthConfig{
-			Username: username,
-			Password: password,
-		})
-	}
-
-	scanner := provenance.NewScanner(provenance.Config{
-		Auth:    auth,
-		Timeout: 30 * time.Second,
-	})
-
+	scanner := newProvenanceScanner(username, password)
 	tagsToScan := r.getTagsToScanProvenance(provConfig, images)
 
 	logger.Info("starting provenance scan",
@@ -783,7 +771,6 @@ func (r *RegistryReconciler) scanProvenance(
 			continue
 		}
 
-		// Provenance requires digest reference
 		if img.Digest == "" {
 			logger.V(1).Info("skipping provenance scan: no digest", "tag", img.Tag)
 			continue
@@ -799,7 +786,6 @@ func (r *RegistryReconciler) scanProvenance(
 		}
 
 		images[i].Provenance = provInfo
-
 		logger.Info("provenance scan completed",
 			"image", imageRef,
 			"builder", provInfo.Builder,
@@ -809,6 +795,21 @@ func (r *RegistryReconciler) scanProvenance(
 	}
 
 	return images
+}
+
+// newProvenanceScanner creates a provenance scanner with authentication.
+func newProvenanceScanner(username, password string) *provenance.Scanner {
+	auth := authn.Anonymous
+	if username != "" {
+		auth = authn.FromConfig(authn.AuthConfig{
+			Username: username,
+			Password: password,
+		})
+	}
+	return provenance.NewScanner(provenance.Config{
+		Auth:    auth,
+		Timeout: 30 * time.Second,
+	})
 }
 
 // getTagsToScanProvenance returns the list of tags to scan for provenance.
