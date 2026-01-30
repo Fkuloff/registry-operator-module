@@ -214,6 +214,22 @@ type ImageInfo struct {
 	// +optional
 	Size int64 `json:"size,omitempty"`
 
+	// Timestamps contains temporal information about the image.
+	// +optional
+	Timestamps *ImageTimestamps `json:"timestamps,omitempty"`
+
+	// Platforms lists the OS/architecture combinations this image supports.
+	// +optional
+	Platforms []string `json:"platforms,omitempty"`
+
+	// Config contains image configuration extracted from the manifest.
+	// +optional
+	Config *ImageConfig `json:"config,omitempty"`
+
+	// Usage contains information about where this image is used in the cluster.
+	// +optional
+	Usage *ImageUsage `json:"usage,omitempty"`
+
 	// Vulnerabilities contains vulnerability scan results.
 	// +optional
 	Vulnerabilities *VulnerabilitySummary `json:"vulnerabilities,omitempty"`
@@ -225,6 +241,99 @@ type ImageInfo struct {
 	// Provenance contains image provenance information.
 	// +optional
 	Provenance *ProvenanceInfo `json:"provenance,omitempty"`
+}
+
+// ImageTimestamps contains temporal information about the image.
+type ImageTimestamps struct {
+	// Created is when the image was built (from image config).
+	// +optional
+	Created *metav1.Time `json:"created,omitempty"`
+
+	// FirstSeen is when the operator first discovered this image.
+	// +optional
+	FirstSeen *metav1.Time `json:"firstSeen,omitempty"`
+
+	// Age is a human-readable age string (e.g., "45d", "2h").
+	// +optional
+	Age string `json:"age,omitempty"`
+}
+
+// ImageConfig contains configuration information extracted from the image.
+type ImageConfig struct {
+	// BaseImage is the base image if specified in labels.
+	// +optional
+	BaseImage string `json:"baseImage,omitempty"`
+
+	// Author is the image author/maintainer.
+	// +optional
+	Author string `json:"author,omitempty"`
+
+	// User is the user/group the container runs as.
+	// +optional
+	User string `json:"user,omitempty"`
+
+	// WorkDir is the working directory inside the container.
+	// +optional
+	WorkDir string `json:"workDir,omitempty"`
+
+	// Entrypoint is the container entrypoint.
+	// +optional
+	Entrypoint []string `json:"entrypoint,omitempty"`
+
+	// Cmd is the container command.
+	// +optional
+	Cmd []string `json:"cmd,omitempty"`
+
+	// ExposedPorts lists the ports exposed by the image.
+	// +optional
+	ExposedPorts []string `json:"exposedPorts,omitempty"`
+
+	// EnvVars lists environment variable names (values hidden for security).
+	// +optional
+	EnvVars []string `json:"envVars,omitempty"`
+
+	// Labels contains OCI/Docker labels from the image.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// LayerCount is the number of layers in the image.
+	// +optional
+	LayerCount int `json:"layerCount,omitempty"`
+}
+
+// ImageUsage contains information about where the image is used in the cluster.
+type ImageUsage struct {
+	// WorkloadCount is the total number of workloads using this image.
+	// +optional
+	WorkloadCount int `json:"workloadCount,omitempty"`
+
+	// Workloads lists the workloads using this image.
+	// +optional
+	Workloads []WorkloadReference `json:"workloads,omitempty"`
+
+	// Namespaces lists unique namespaces where the image is used.
+	// +optional
+	Namespaces []string `json:"namespaces,omitempty"`
+
+	// TotalPods is the total number of pods running this image.
+	// +optional
+	TotalPods int `json:"totalPods,omitempty"`
+}
+
+// WorkloadReference identifies a workload using an image.
+type WorkloadReference struct {
+	// Kind is the workload kind (Deployment, StatefulSet, DaemonSet).
+	Kind string `json:"kind"`
+
+	// Namespace is the workload namespace.
+	Namespace string `json:"namespace"`
+
+	// Name is the workload name.
+	Name string `json:"name"`
+
+	// Replicas is the number of replicas (for Deployment/StatefulSet).
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
 }
 
 // VulnerabilitySummary contains vulnerability scan results for an image.

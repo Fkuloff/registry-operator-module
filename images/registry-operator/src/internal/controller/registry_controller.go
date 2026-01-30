@@ -78,6 +78,8 @@ func (r *RegistryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var driftStatus *v1alpha1.DriftStatus
 	if r.shouldDetectDrift(&reg) {
 		driftStatus = r.detectDrift(ctx, logger, &reg, images)
+		// Enrich images with usage data from drift detection
+		images = enrichImagesWithUsage(images, driftStatus)
 	}
 
 	if err := r.updateStatusSuccess(ctx, &reg, images, driftStatus); err != nil {

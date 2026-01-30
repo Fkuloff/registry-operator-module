@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"registry-operator/apis/registry.kubecontroller.io/v1alpha1"
@@ -162,14 +165,44 @@ func (r *RegistryReconciler) fetchSingleImageDetails(
 	cfg resolvedScanConfig,
 ) v1alpha1.ImageInfo {
 	info := v1alpha1.ImageInfo{Tag: tag}
+	now := metav1.Now()
 
 	err := r.withRetry(cfg, func() error {
-		details, err := regClient.GetImageDetails(ctx, repository, tag)
+		details, err := regClient.GetExtendedImageDetails(ctx, repository, tag)
 		if err != nil {
 			return err
 		}
+
 		info.Digest = details.Digest
 		info.Size = details.Size
+		info.Platforms = details.Platforms
+
+		// Populate timestamps
+		info.Timestamps = &v1alpha1.ImageTimestamps{
+			FirstSeen: &now,
+		}
+		if details.Created != nil {
+			created := metav1.NewTime(*details.Created)
+			info.Timestamps.Created = &created
+			info.Timestamps.Age = formatAge(time.Since(*details.Created))
+		}
+
+		// Populate config
+		if details.Config != nil {
+			info.Config = &v1alpha1.ImageConfig{
+				BaseImage:    details.Config.BaseImage,
+				Author:       details.Config.Author,
+				User:         details.Config.User,
+				WorkDir:      details.Config.WorkDir,
+				Entrypoint:   details.Config.Entrypoint,
+				Cmd:          details.Config.Cmd,
+				ExposedPorts: details.Config.ExposedPorts,
+				EnvVars:      details.Config.EnvVars,
+				Labels:       details.Config.Labels,
+				LayerCount:   details.LayerCount,
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -177,4 +210,34 @@ func (r *RegistryReconciler) fetchSingleImageDetails(
 	}
 
 	return info
+}
+
+// formatAge formats a duration into a human-readable age string.
+func formatAge(d time.Duration) string {
+	if d < 0 {
+		d = -d
+	}
+
+	days := int(d.Hours() / 24)
+	if days > 365 {
+		return strconv.Itoa(days/365) + "y"
+	}
+	if days > 30 {
+		return strconv.Itoa(days/30) + "mo"
+	}
+	if days > 0 {
+		return strconv.Itoa(days) + "d"
+	}
+
+	hours := int(d.Hours())
+	if hours > 0 {
+		return strconv.Itoa(hours) + "h"
+	}
+
+	minutes := int(d.Minutes())
+	if minutes > 0 {
+		return strconv.Itoa(minutes) + "m"
+	}
+
+	return "<1m"
 }

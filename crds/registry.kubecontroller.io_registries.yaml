@@ -402,9 +402,65 @@ spec:
                   description: ImageInfo contains information about a single image
                     tag.
                   properties:
+                    config:
+                      description: Config contains image configuration extracted from
+                        the manifest.
+                      properties:
+                        author:
+                          description: Author is the image author/maintainer.
+                          type: string
+                        baseImage:
+                          description: BaseImage is the base image if specified in
+                            labels.
+                          type: string
+                        cmd:
+                          description: Cmd is the container command.
+                          items:
+                            type: string
+                          type: array
+                        entrypoint:
+                          description: Entrypoint is the container entrypoint.
+                          items:
+                            type: string
+                          type: array
+                        envVars:
+                          description: EnvVars lists environment variable names (values
+                            hidden for security).
+                          items:
+                            type: string
+                          type: array
+                        exposedPorts:
+                          description: ExposedPorts lists the ports exposed by the
+                            image.
+                          items:
+                            type: string
+                          type: array
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels contains OCI/Docker labels from the
+                            image.
+                          type: object
+                        layerCount:
+                          description: LayerCount is the number of layers in the image.
+                          type: integer
+                        user:
+                          description: User is the user/group the container runs as.
+                          type: string
+                        workDir:
+                          description: WorkDir is the working directory inside the
+                            container.
+                          type: string
+                      type: object
                     digest:
                       description: Digest is the image digest (SHA256).
                       type: string
+                    platforms:
+                      description: Platforms lists the OS/architecture combinations
+                        this image supports.
+                      items:
+                        type: string
+                      type: array
                     provenance:
                       description: Provenance contains image provenance information.
                       properties:
@@ -513,6 +569,71 @@ spec:
                     tag:
                       description: Tag is the image tag.
                       type: string
+                    timestamps:
+                      description: Timestamps contains temporal information about
+                        the image.
+                      properties:
+                        age:
+                          description: Age is a human-readable age string (e.g., "45d",
+                            "2h").
+                          type: string
+                        created:
+                          description: Created is when the image was built (from image
+                            config).
+                          format: date-time
+                          type: string
+                        firstSeen:
+                          description: FirstSeen is when the operator first discovered
+                            this image.
+                          format: date-time
+                          type: string
+                      type: object
+                    usage:
+                      description: Usage contains information about where this image
+                        is used in the cluster.
+                      properties:
+                        namespaces:
+                          description: Namespaces lists unique namespaces where the
+                            image is used.
+                          items:
+                            type: string
+                          type: array
+                        totalPods:
+                          description: TotalPods is the total number of pods running
+                            this image.
+                          type: integer
+                        workloadCount:
+                          description: WorkloadCount is the total number of workloads
+                            using this image.
+                          type: integer
+                        workloads:
+                          description: Workloads lists the workloads using this image.
+                          items:
+                            description: WorkloadReference identifies a workload using
+                              an image.
+                            properties:
+                              kind:
+                                description: Kind is the workload kind (Deployment,
+                                  StatefulSet, DaemonSet).
+                                type: string
+                              name:
+                                description: Name is the workload name.
+                                type: string
+                              namespace:
+                                description: Namespace is the workload namespace.
+                                type: string
+                              replicas:
+                                description: Replicas is the number of replicas (for
+                                  Deployment/StatefulSet).
+                                format: int32
+                                type: integer
+                            required:
+                            - kind
+                            - name
+                            - namespace
+                            type: object
+                          type: array
+                      type: object
                     vulnerabilities:
                       description: Vulnerabilities contains vulnerability scan results.
                       properties:

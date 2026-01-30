@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -368,4 +369,73 @@ func (r *RegistryReconciler) detectDrift(
 	)
 
 	return driftStatus
+}
+
+// enrichImagesWithUsage adds workload usage information to images from drift status.
+func enrichImagesWithUsage(images []v1alpha1.ImageInfo, driftStatus *v1alpha1.DriftStatus) []v1alpha1.ImageInfo {
+	if driftStatus == nil || len(driftStatus.Workloads) == 0 {
+		return images
+	}
+
+	// Build a map of tag -> workloads using that tag
+	tagWorkloads := make(map[string][]v1alpha1.WorkloadReference)
+	tagNamespaces := make(map[string]map[string]struct{})
+
+	for _, wd := range driftStatus.Workloads {
+		tag := wd.CurrentTag
+		if tag == "" {
+			continue
+		}
+
+		ref := v1alpha1.WorkloadReference{
+			Kind:      wd.Kind,
+			Namespace: wd.Namespace,
+			Name:      wd.Name,
+		}
+
+		tagWorkloads[tag] = append(tagWorkloads[tag], ref)
+
+		if tagNamespaces[tag] == nil {
+			tagNamespaces[tag] = make(map[string]struct{})
+		}
+		tagNamespaces[tag][wd.Namespace] = struct{}{}
+	}
+
+	// Enrich images with usage information
+	for i, img := range images {
+		workloads, ok := tagWorkloads[img.Tag]
+		if !ok || len(workloads) == 0 {
+			continue
+		}
+
+		namespaces := make([]string, 0, len(tagNamespaces[img.Tag]))
+		for ns := range tagNamespaces[img.Tag] {
+			namespaces = append(namespaces, ns)
+		}
+		sort.Strings(namespaces)
+
+		totalPods := calculateTotalPods(workloads)
+
+		images[i].Usage = &v1alpha1.ImageUsage{
+			WorkloadCount: len(workloads),
+			Workloads:     workloads,
+			Namespaces:    namespaces,
+			TotalPods:     totalPods,
+		}
+	}
+
+	return images
+}
+
+// calculateTotalPods calculates total pod count from workload references.
+func calculateTotalPods(workloads []v1alpha1.WorkloadReference) int {
+	total := 0
+	for _, w := range workloads {
+		if w.Replicas > 0 {
+			total += int(w.Replicas)
+		} else {
+			total++
+		}
+	}
+	return total
 }
