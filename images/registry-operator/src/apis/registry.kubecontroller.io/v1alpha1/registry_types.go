@@ -48,6 +48,10 @@ type RegistrySpec struct {
 	// ProvenanceTracking defines provenance tracking settings.
 	// +optional
 	ProvenanceTracking *ProvenanceConfig `json:"provenanceTracking,omitempty"`
+
+	// Webhook defines webhook notification settings.
+	// +optional
+	Webhook *WebhookConfig `json:"webhook,omitempty"`
 }
 
 // ProvenanceConfig defines provenance tracking settings.
@@ -191,6 +195,10 @@ type RegistryStatus struct {
 	// Drift contains drift detection results.
 	// +optional
 	Drift *DriftStatus `json:"drift,omitempty"`
+
+	// Webhook contains webhook notification status.
+	// +optional
+	Webhook *WebhookStatus `json:"webhook,omitempty"`
 }
 
 // ImageInfo contains information about a single image tag.
@@ -375,6 +383,57 @@ type ProvenanceInfo struct {
 	LastCheckTime *metav1.Time `json:"lastCheckTime,omitempty"`
 }
 
+// WebhookConfig defines webhook notification settings.
+type WebhookConfig struct {
+	// Enabled enables webhook notifications.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// URL is the webhook endpoint URL.
+	URL string `json:"url"`
+
+	// Events specifies which events trigger notifications.
+	// Supported events: "scan-completed", "vulnerability-critical".
+	// If empty, all events are sent.
+	// +optional
+	Events []string `json:"events,omitempty"`
+
+	// AuthSecret references a Secret containing authentication credentials.
+	// Supports keys: "token" (Bearer auth) or "username"+"password" (Basic auth).
+	// +optional
+	AuthSecret *WebhookAuthSecret `json:"authSecret,omitempty"`
+
+	// InsecureSkipVerify skips TLS certificate verification.
+	// +optional
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+
+	// Timeout is the HTTP request timeout (e.g., "10s", "30s").
+	// Defaults to "10s".
+	// +optional
+	Timeout string `json:"timeout,omitempty"`
+}
+
+// WebhookAuthSecret references a Secret containing webhook authentication credentials.
+type WebhookAuthSecret struct {
+	// Name is the name of the Secret.
+	Name string `json:"name"`
+
+	// TokenKey is the key in the Secret containing the Bearer token.
+	// If specified, Bearer authentication is used.
+	// +optional
+	TokenKey string `json:"tokenKey,omitempty"`
+
+	// UsernameKey is the key in the Secret containing the username for Basic auth.
+	// Defaults to "username".
+	// +optional
+	UsernameKey string `json:"usernameKey,omitempty"`
+
+	// PasswordKey is the key in the Secret containing the password for Basic auth.
+	// Defaults to "password".
+	// +optional
+	PasswordKey string `json:"passwordKey,omitempty"`
+}
+
 // DriftDetectionConfig defines drift detection settings.
 type DriftDetectionConfig struct {
 	// Enabled enables drift detection.
@@ -390,6 +449,25 @@ type DriftDetectionConfig struct {
 	// Defaults to scanInterval if not specified.
 	// +optional
 	CheckInterval int64 `json:"checkInterval,omitempty"`
+}
+
+// WebhookStatus tracks webhook notification state.
+type WebhookStatus struct {
+	// LastSentTime is the timestamp of the last successful notification.
+	// +optional
+	LastSentTime *metav1.Time `json:"lastSentTime,omitempty"`
+
+	// LastStatus is the result of the last notification attempt: "Sent" or "Failed".
+	// +optional
+	LastStatus string `json:"lastStatus,omitempty"`
+
+	// LastEvent is the event type of the last notification.
+	// +optional
+	LastEvent string `json:"lastEvent,omitempty"`
+
+	// Message contains details about the last notification attempt.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // DriftStatus contains drift detection results.

@@ -14,8 +14,6 @@ import (
 func TestFilterTags(t *testing.T) {
 	t.Parallel()
 
-	r := &RegistryReconciler{}
-
 	tests := []struct {
 		name    string
 		give    []string
@@ -141,7 +139,7 @@ func TestFilterTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := r.filterTags(tt.give, tt.filter)
+			got, err := filterTags(tt.give, tt.filter)
 
 			if tt.wantErr {
 				assert.Error(t, err)

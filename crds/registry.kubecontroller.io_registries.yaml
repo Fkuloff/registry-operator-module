@@ -219,6 +219,60 @@ spec:
                       type: string
                     type: array
                 type: object
+              webhook:
+                description: Webhook defines webhook notification settings.
+                properties:
+                  authSecret:
+                    description: |-
+                      AuthSecret references a Secret containing authentication credentials.
+                      Supports keys: "token" (Bearer auth) or "username"+"password" (Basic auth).
+                    properties:
+                      name:
+                        description: Name is the name of the Secret.
+                        type: string
+                      passwordKey:
+                        description: |-
+                          PasswordKey is the key in the Secret containing the password for Basic auth.
+                          Defaults to "password".
+                        type: string
+                      tokenKey:
+                        description: |-
+                          TokenKey is the key in the Secret containing the Bearer token.
+                          If specified, Bearer authentication is used.
+                        type: string
+                      usernameKey:
+                        description: |-
+                          UsernameKey is the key in the Secret containing the username for Basic auth.
+                          Defaults to "username".
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  enabled:
+                    description: Enabled enables webhook notifications.
+                    type: boolean
+                  events:
+                    description: |-
+                      Events specifies which events trigger notifications.
+                      Supported events: "scan-completed", "vulnerability-critical".
+                      If empty, all events are sent.
+                    items:
+                      type: string
+                    type: array
+                  insecureSkipVerify:
+                    description: InsecureSkipVerify skips TLS certificate verification.
+                    type: boolean
+                  timeout:
+                    description: |-
+                      Timeout is the HTTP request timeout (e.g., "10s", "30s").
+                      Defaults to "10s".
+                    type: string
+                  url:
+                    description: URL is the webhook endpoint URL.
+                    type: string
+                required:
+                - url
+                type: object
             required:
             - repository
             - url
@@ -536,6 +590,26 @@ spec:
                 description: Message contains error details when LastScanStatus is
                   "Failed".
                 type: string
+              webhook:
+                description: Webhook contains webhook notification status.
+                properties:
+                  lastEvent:
+                    description: LastEvent is the event type of the last notification.
+                    type: string
+                  lastSentTime:
+                    description: LastSentTime is the timestamp of the last successful
+                      notification.
+                    format: date-time
+                    type: string
+                  lastStatus:
+                    description: 'LastStatus is the result of the last notification
+                      attempt: "Sent" or "Failed".'
+                    type: string
+                  message:
+                    description: Message contains details about the last notification
+                      attempt.
+                    type: string
+                type: object
             type: object
         type: object
     served: true
