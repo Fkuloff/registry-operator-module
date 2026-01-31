@@ -94,7 +94,9 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
                             ▼
                 ┌───────────────────────┐
                 │ Fetch image details   │
-                │ (digest, size)        │
+                │ (digest, size,        │
+                │  platforms, config,   │
+                │  timestamps)          │
                 │ (concurrent if cfg)   │
                 └───────────────────────┘
                             │
@@ -147,6 +149,7 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
                 │ Scan workloads        │       │
                 │ + analyze drift       │       │
                 │ + semver comparison   │       │
+                │ + enrich image usage  │       │
                 └───────────────────────┘       │
                             │                   │
                             ▼◀──────────────────┘
@@ -161,148 +164,6 @@ Registry Operator is a Kubernetes controller built with [controller-runtime](htt
                 │ scanInterval          │
                 └───────────────────────┘
 ```
-
-## Key Components
-
-### RegistryReconciler
-
-Main controller logic in `internal/controller/registry_controller.go`.
-
-Responsibilities:
-- Watch `Registry` custom resources
-- Manage finalizers for cleanup
-- Orchestrate scanning workflow
-- Update CR status
-
-Key methods:
-- `Reconcile()` — main loop entry
-- `scanRegistry()` — fetch tags and image details
-- `scanVulnerabilities()` — run Trivy scans
-- `scanSBOM()` — generate SBOM with Syft
-- `scanProvenance()` — fetch SLSA attestations
-- `filterTags()` — apply include/exclude/limit filters
-- `fetchImageDetails()` — worker pool for parallel processing
-
-### Registry Client
-
-Docker Registry v2 API client in `internal/registry/client.go`.
-
-Uses [go-containerregistry](https://github.com/google/go-containerregistry) library.
-
-Features:
-- Anonymous and basic authentication
-- TLS configuration (insecure option)
-- Configurable timeout
-- List tags and fetch manifests
-
-### Vulnerability Scanner
-
-Trivy CLI wrapper in `internal/vulnerability/scanner.go`.
-
-Features:
-- Executes `trivy image` as subprocess
-- Parses JSON output
-- Configurable severity threshold
-- Aggregates results into summary
-- Extracts top critical CVEs
-
-### SBOM Scanner
-
-Syft CLI wrapper in `internal/sbom/scanner.go`.
-
-Features:
-- Executes `syft scan` as subprocess
-- Supports multiple formats (SPDX, CycloneDX, Syft JSON)
-- Package metadata extraction (name, version, type)
-
-### SBOM Analyzer
-
-Dependency analysis in `internal/sbom/analyzer.go`.
-
-Features:
-- Distinguishes direct vs transitive dependencies
-- Calculates package importance scores
-- Identifies top-level packages (base OS, runtimes)
-- Enriches packages with vulnerability data
-- Links CVEs to specific packages
-
-### Drift Detection
-
-Workload drift monitoring in `internal/drift/`.
-
-Components:
-- **Scanner** (`scanner.go`): Discovers Deployments, StatefulSets, DaemonSets
-- **Analyzer** (`analyzer.go`): Compares workload images with registry images
-
-Features:
-- Semantic version comparison using [semver](https://github.com/Masterminds/semver)
-- Identifies workloads with outdated or vulnerable images
-- Generates actionable recommendations (NO_ACTION, UPDATE_AVAILABLE, URGENT_UPDATE)
-- Tracks CVE fixes in available updates
-- Multi-namespace support
-
-### Provenance Scanner
-
-SLSA provenance tracking in `internal/provenance/`.
-
-Uses [go-containerregistry](https://github.com/google/go-containerregistry) OCI Referrers API to fetch attestations.
-
-Features:
-- Reads SLSA provenance attestations (v0.2 and v1.0 formats)
-- Extracts builder identity and source information
-- Derives SLSA level (0-3) from builder ID
-- Detects signature attestations
-- No external CLI dependencies (pure Go)
-
-Supported attestation formats:
-- In-toto Statement v0.1 / v1
-- SLSA Provenance v0.2 / v1.0
-- Cosign signature attestations
-
-SLSA Level derivation:
-- **Level 3**: Known builders (SLSA GitHub Generator, Google Cloud Build hosted)
-- **Level 2**: GitHub Actions builders, Cloud Build
-- **Level 1**: Any other builder with provenance attestation
-- **Level 0**: No attestation found
-
-## CRD Schema
-
-### Registry Spec
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `url` | string | Registry URL (e.g., `https://registry-1.docker.io`) |
-| `repository` | string | Repository path (e.g., `library/nginx`) |
-| `scanInterval` | int64 | Seconds between scans (default: 300) |
-| `credentialsSecret` | object | Reference to Secret with credentials |
-| `insecureSkipVerify` | bool | Skip TLS certificate verification |
-| `scanConfig` | object | Timeout, retries, concurrency settings |
-| `tagFilter` | object | Include/exclude patterns, limit, sort |
-| `vulnerabilityScanning` | object | Trivy scan configuration |
-| `sbomGeneration` | object | Syft SBOM generation configuration |
-| `driftDetection` | object | Workload drift monitoring configuration |
-| `provenanceTracking` | object | SLSA provenance tracking configuration |
-
-### Registry Status
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `lastScanTime` | Time | Timestamp of last scan |
-| `lastScanStatus` | string | "Success" or "Failed" |
-| `message` | string | Error message if failed |
-| `images` | []ImageInfo | List of discovered images |
-| `drift` | DriftStatus | Drift detection results |
-
-### ImageInfo
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `tag` | string | Image tag |
-| `digest` | string | SHA256 digest |
-| `size` | int64 | Total size in bytes |
-| `vulnerabilities` | object | CVE summary (if scanned) |
-| `sbom` | object | SBOM data with packages and dependencies |
-| `provenance` | object | SLSA provenance info (builder, source, level) |
 
 ## Concurrency Model
 
@@ -319,20 +180,9 @@ Uses **worker pool pattern** for optimal resource usage:
 - Predictable memory usage
 - Efficient context cancellation
 
-### Vulnerability Scanning
+### Vulnerability & SBOM Scanning
 
-Sequential per image. Each scan:
-- Spawns Trivy subprocess
-- Timeout via context
-- Independent of other scans
-
-### SBOM Generation
-
-Sequential per image. Each generation:
-- Spawns Syft subprocess
-- Processes artifacts and packages
-- Runs dependency analysis
-- Enriches with vulnerability data
+Sequential per image. Each scan spawns a subprocess (Trivy/Syft) with timeout via context.
 
 ## Error Handling
 

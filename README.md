@@ -29,11 +29,14 @@ Registry Operator is a Kubernetes-native solution for comprehensive container re
 | Feature | Description |
 |---------|-------------|
 | **Registry Scanning** | Periodically polls Docker registries for image tags |
-| **Metadata Collection** | Extracts digests (SHA256) and sizes for each image |
+| **Extended Metadata** | Extracts digests, sizes, platforms, timestamps, and image configuration |
+| **Multi-Arch Support** | Detects all OS/architecture combinations for each image |
+| **Image Configuration** | Captures author, user, entrypoint, cmd, exposed ports, env vars, labels |
 | **Vulnerability Detection** | Integrates with Trivy for CVE scanning with severity filtering |
 | **SBOM Generation** | Generates Software Bill of Materials using Syft for dependency tracking |
 | **Dependency Analysis** | Distinguishes direct vs transitive dependencies |
 | **Drift Detection** | Compares running workloads (Deployments/StatefulSets/DaemonSets) with registry images using semantic versioning |
+| **Usage Tracking** | Shows which workloads are using each image tag |
 | **Provenance Tracking** | Reads SLSA provenance attestations to verify image origin and build integrity |
 | **Tag Filtering** | Include/exclude by regex, limit count, sort order |
 | **Private Registries** | Supports authentication via Kubernetes Secrets |
@@ -292,6 +295,27 @@ kubectl get registry nginx -o json | jq '.status.images[] | select(.provenance.s
 
 # Find signed images
 kubectl get registry nginx -o json | jq '.status.images[] | select(.provenance.signed == true)'
+
+# View image timestamps and age
+kubectl get registry nginx -o jsonpath='{.status.images[0].timestamps}' | jq .
+
+# List supported platforms for an image
+kubectl get registry nginx -o jsonpath='{.status.images[0].platforms}'
+
+# View image configuration (entrypoint, exposed ports, etc.)
+kubectl get registry nginx -o jsonpath='{.status.images[0].config}' | jq .
+
+# Find images older than 30 days
+kubectl get registry nginx -o json | jq '.status.images[] | select(.timestamps.age | test("^[3-9][0-9]+d|^[0-9]+mo|^[0-9]+y"))'
+
+# Find multi-arch images
+kubectl get registry nginx -o json | jq '.status.images[] | select(.platforms | length > 1)'
+
+# View workload usage for an image
+kubectl get registry nginx -o jsonpath='{.status.images[0].usage}' | jq .
+
+# Find images used by multiple workloads
+kubectl get registry nginx -o json | jq '.status.images[] | select(.usage.workloadCount > 1)'
 ```
 
 ## Configuration
@@ -320,6 +344,46 @@ kubectl get registry nginx -o json | jq '.status.images[] | select(.provenance.s
 | `provenanceTracking.enabled` | bool | | false | Enable SLSA provenance tracking |
 | `provenanceTracking.scanInterval` | int64 | | 3600 | Provenance check interval (seconds) |
 | `provenanceTracking.tags` | []string | | [] | Tags to check (empty=all) |
+
+### Status Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lastScanTime` | Time | When the last scan completed |
+| `lastScanStatus` | string | "Success" or "Failed" |
+| `message` | string | Error message if scan failed |
+| `images` | []ImageInfo | Discovered images with metadata |
+| `drift` | DriftStatus | Drift detection results |
+
+#### ImageInfo Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tag` | string | Image tag |
+| `digest` | string | SHA256 digest |
+| `size` | int64 | Total size in bytes |
+| `timestamps.created` | Time | When the image was built |
+| `timestamps.firstSeen` | Time | When operator first discovered this image |
+| `timestamps.age` | string | Human-readable age (e.g., "45d", "2h") |
+| `platforms` | []string | Supported OS/arch (e.g., "linux/amd64", "linux/arm64/v8") |
+| `config.author` | string | Image author/maintainer |
+| `config.user` | string | User the container runs as |
+| `config.workDir` | string | Working directory |
+| `config.entrypoint` | []string | Container entrypoint |
+| `config.cmd` | []string | Container command |
+| `config.exposedPorts` | []string | Exposed ports |
+| `config.envVars` | []string | Environment variable names (values hidden) |
+| `config.labels` | map[string]string | OCI/Docker labels |
+| `config.layerCount` | int | Number of image layers |
+| `config.baseImage` | string | Base image (from labels) |
+| `usage.workloadCount` | int | Number of workloads using this image |
+| `usage.workloads` | []WorkloadReference | List of workloads (kind/namespace/name) |
+| `usage.namespaces` | []string | Namespaces where image is used |
+| `usage.totalPods` | int | Total pods running this image |
+| `vulnerabilities` | object | CVE summary (if scanned) |
+| `sbom` | object | SBOM data with packages |
+| `provenance` | object | SLSA provenance info |
+
 | `scanConfig.timeout` | string | | 30s | HTTP request timeout |
 | `scanConfig.retryAttempts` | int | | 3 | Retry attempts on failure |
 | `scanConfig.concurrency` | int | | 1 | Parallel image processing |
